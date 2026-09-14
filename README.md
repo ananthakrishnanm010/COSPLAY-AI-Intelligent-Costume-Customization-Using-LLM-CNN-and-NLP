@@ -1,132 +1,152 @@
-# COSPLAY AI: Intelligent Costume Customization  
-## ABSTRACT  
-The proposed AI-Powered Brand-Aware Clothing Customization System is a Generative AI-based platform that enables users to create personalized clothing designs using natural-language prompts while maintaining the standard sizing specifications of selected clothing brands. Unlike conventional fashion platforms that provide fixed designs and limited customization options, the proposed system allows users to describe their desired garment features, including clothing type, color, embroidery, size, and specific measurement modifications. Natural Language Processing is used to understand and extract the user's requirements from the prompt, while a structured database stores brand-specific standard size measurements. Based on the selected brand and size, the system retrieves the relevant measurements and calculates customized dimensions according to the user's instructions. The processed design requirements and calculated measurements are then provided to a Generative AI model to create a visual representation of the customized garment. The system can also support iterative customization, allowing users to refine their designs through additional naturallanguage instructions. By combining Natural Language Processing, Generative AI, database-driven measurement calculation, and web technologies, the proposed system provides an intuitive, flexible, and personalized approach to digital clothing customization.  
-## PROBLEM STATEMENT
-Existing online fashion platforms mainly provide customers with predefined clothing designs  and fixed size options, offering limited flexibility for personalized customization. Users who  want to modify specific aspects of a garment, such as color, embroidery, sleeve length, shirt length, or other dimensions, often have to depend on manual measurements or limited customization forms. Additionally, standard sizes can vary between different clothing brands, making it difficult for users to customize a garment while maintaining the sizing standards of a particular brand. Conventional systems also lack the ability to understand complex clothing requirements expressed naturally by users. Therefore, there is a need for an intelligent system that can understand natural-language customization requests, identify the selected brand and size, retrieve the corresponding standard measurements, and calculate the required modifications accurately. The proposed AI-Powered Brand-Aware Clothing Customization System addresses this problem by combining Natural Language Processing, a brand-specific measurement database, and Generative AI. The system interprets user prompts, applies the requested dimensional and visual changes based on the selected brand's standard size, and generates a visual representation of the customized garment. This provides users with a more intuitive, flexible, and personalized approach to clothing design and customization.  
+# AI-Powered Brand-Aware Clothing Customization System
+
+A generative AI platform that lets users design personalized clothing using natural-language prompts, while keeping garments true to a selected brand's standard sizing.
+
+## Abstract
+
+Existing fashion platforms mostly offer predefined designs and fixed sizes, leaving little room for personalization. This project lets users describe the garment changes they want — type, color, embroidery, size, specific measurements — in plain language. The system:
+
+1. Parses the prompt with NLP/LLM to extract structured customization data.
+2. Looks up the selected brand's standard measurements from a database.
+3. Calculates the customized dimensions deterministically, based on the brand's base sizing and the user's requested changes.
+4. Feeds the design requirements and calculated measurements to a generative AI image model to produce a visual of the customized garment, based on a reference image.
+5. Supports iterative refinement — users can keep adjusting the design with follow-up prompts.
+
+## Problem Statement
+
+Standard sizes vary between brands, and most platforms can't reconcile a user's natural-language customization request with a specific brand's sizing standard. Customers are stuck choosing between rigid presets or manual, error-prone measurement entry. This system combines NLP, a brand-specific measurement database, and generative AI to close that gap — interpreting free-form requests, grounding them in real brand measurements, and rendering the result visually.
+
 ## JIRA DASHBOARD LINK 
 https://ananthakrishnanm010.atlassian.net/jira/software/projects/COS/boards/34/backlog?atlOrigin=eyJpIjoiNjVhNDQ2ZDRkNjBjNDI1MjgyMjI2ZmQzZmRkOWZkN2QiLCJwIjoiai
 
 ## Tech Stack
 
-### Frontend (Client)
+| Layer | Technology |
+|---|---|
+| Frontend | React |
+| Backend | Express (Node.js) |
+| Database | PostgreSQL |
+| AI — language | LLM API (prompt parsing / customization extraction) |
+| AI — image | Generative image model (reference-guided garment generation) |
+| Image storage | Cloudinary |
+| Infrastructure | Docker Compose |
 
-- **Framework:** React.js
-- **Build Tool:** Vite
-- **Routing:** React Router DOM (v6+)
-- **Styling:** Vanilla CSS Modules
-- **State & Sync:** Context API (global state) & standard fetching services
+## Architecture Overview
 
-### Backend (Server)
-
-- **Runtime:** Node.js
-- **Framework:** Express.js
-- **Database ORM:** Prisma ORM
-- **Authentication:** JWT (JSON Web Tokens)
-
-### Infrastructure & Services
-
-- **Database:** PostgreSQL (Neon Serverless PostgreSQL)
-- **Frontend Hosting:** Vercel
-- **Backend Hosting:** Render
-
----
-
-## Workspace Structure Overview
-
-This repository uses npm Workspaces to manage the frontend client and backend server code in one single project root.
-
-```text
-thread-and-form/
-├── client/          # Vite + React frontend application
-├── server/          # Node.js + Express backend application
-├── shared/          # Shared constants, types, and logic definitions
-├── docs/            # Technical documentation guides
-└── .github/         # Automated actions (CI/CD) workflows
+```
+React (frontend)
+   │
+   ▼
+Express API (backend)
+   ├── Brand & Size API ──────► PostgreSQL (brand/measurement data)
+   ├── Reference Image Upload ─► Cloudinary
+   ├── LLM Parsing Service ───► LLM API (extracts structured customization JSON)
+   ├── Measurement Engine ────► deterministic calculation from brand base + requested changes
+   └── Image Generation ──────► Generative image API (reference-guided)
 ```
 
----
+**Flow:** upload reference garment → pick brand & size → describe customization in natural language → LLM extracts structured data → measurement engine calculates final dimensions → generation service produces the customized garment image → result shown to user, refinable via further prompts.
 
-## Installation & Setup
+## Project Structure
 
-To run this project locally, ensure you have **Node.js (v18+)** and **npm** installed.
-
-### 1. Clone & Install Dependencies
-
-Run this at the root directory to install dependencies for all workspaces at once:
-
-```bash
-npm install
+```
+.
+├── frontend/               # React app
+├── backend/                # Express API
+│   ├── routes/
+│   ├── services/           # LLM parsing, measurement calculation, image generation
+│   ├── models/             # DB models
+│   └── config/
+├── docker-compose.yml
+├── .env.example
+└── README.md
 ```
 
-### 2. Configure Environment Variables
+*(Adjust to match your actual folder layout once scaffolded.)*
 
-Copy the template `.env.example` file to `.env` in the root:
+## Getting Started
 
-```bash
-cp .env.example .env
-```
+### Prerequisites
 
-Open the `.env` file and enter your PostgreSQL database URL, JWT secret key, and optional payment key values.
+- Node.js (v18+)
+- Docker & Docker Compose
+- PostgreSQL (if not running via Docker)
+- API keys for the LLM provider, image-generation provider, and Cloudinary
 
-### 3. Run Database Migrations
+### Setup
 
-Initialize your database and run outstanding schema migrations using Prisma:
-
-```bash
-npm run db:migrate
-```
-
-### 4. Seed the Database
-
-Populate database categories and items with initial seed mock data:
-
-```bash
-npm run db:seed
-```
-
-### 5. Start Development Servers
-
-Run the client and server concurrently in development mode:
-
-```bash
-npm run dev
-```
-
-- Frontend starts at: `http://localhost:5173`
-- Backend starts at: `http://localhost:5000`
-
----
-
-## Development Workflow
-
-1. **Clean Code Formatting:** Code style rules are enforced with ESLint and Prettier. To auto-format your code, run:
+1. Clone the repository
    ```bash
-   npm run format
-   ```
-2. **Feature Isolation:** When building out a new feature, place feature-specific UI, hooks, and services under a separate subfolder inside `client/src/features/<feature-name>`.
-3. **Database Schema Modifications:** When modifying DB schemas, update `server/prisma/schema.prisma` and create a migration using:
-   ```bash
-   npx prisma migrate dev --name <migration_name>
+   git clone <https://github.com/arya-arun-123/COSPLAY-AI-Intelligent-Costume-Customization-Using-LLM-CNN-and-NLP>
+   cd <project-folder>
    ```
 
----
+2. Copy environment variables and fill in your keys
+   ```bash
+   cp .env.example .env
+   ```
 
-## Future Feature Roadmap
+3. Start services with Docker Compose
+   ```bash
+   docker compose up --build
+   ```
 
-- **Phase 1: Foundation & Authentication** - User signup, secure JWT auth, session management.
-- **Phase 2: Product Catalog** - Categories, products, search, inventory counting, image uploads.
-- **Phase 3: Customer Experience** - Cart, wishlist, review ratings, coupon applications.
-- **Phase 4: Checkout & Payments** - Order management, Stripe API checkout integration.
-- **Phase 5: Administration** - Metrics dashboard, inventory adjustments, user role permissions.
+   Or run manually:
+   ```bash
+   # Backend
+   cd backend
+   npm install
+   npm run dev
 
----
+   # Frontend
+   cd frontend
+   npm install
+   npm start
+   ```
 
-## Documentation
+4. Run database migrations (if applicable)
+   ```bash
+   npm run migrate
+   ```
 
-For deep dives into the project design, please check out the files inside the [docs/](file:///d:/COSPLAY.COM/docs/) folder:
+### Environment Variables
 
-- [Architecture Guide](file:///d:/COSPLAY.COM/docs/Architecture.md)
-- [Folder Structure Explanation](file:///d:/COSPLAY.COM/docs/FolderStructure.md)
-- [API Design Specification](file:///d:/COSPLAY.COM/docs/API.md)
-- [Database Schema & Seed Guidelines](file:///d:/COSPLAY.COM/docs/Database.md)
-- [Deployment Walkthroughs](file:///d:/COSPLAY.COM/docs/Deployment.md)
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `LLM_API_KEY` | API key for the language model used to parse customization prompts |
+| `IMAGE_GEN_API_KEY` | API key for the generative image model |
+| `CLOUDINARY_URL` | Cloudinary credentials for image storage |
+| `PORT` | Backend server port |
+
+## API Overview
+
+| Endpoint | Description |
+|---|---|
+| `POST /api/images/upload` | Upload a reference garment image |
+| `GET /api/brands` | List supported brands |
+| `GET /api/brands/:brand/sizes` | Get available sizes for a brand |
+| `GET /api/measurements` | Retrieve standard measurements for a brand/size |
+| `POST /api/customize/parse` | Send a natural-language prompt, get structured customization data |
+| `POST /api/customize/measurements` | Calculate customized measurements from base + requested changes |
+| `POST /api/customize/generate` | Generate the customized garment image |
+
+
+## Roadmap
+
+- [x] Project setup — React, Express, PostgreSQL, Docker Compose
+- [ ] Frontend customization flow — home, upload, brand/size selection, prompt, processing, result screens
+- [ ] Backend brand & measurement management APIs
+- [ ] Deterministic measurement calculation engine
+- [ ] LLM-based customization parsing and validation
+- [ ] AI garment generation with reference-image preservation
+- [ ] End-to-end pipeline integration
+- [ ] E2E testing, UI polish, and demo handoff
+
+## Contributing
+
+1. Create a feature branch from `main`
+2. Follow the project's Git workflow (see `/docs` if available)
+3. Open a PR with a clear description of changes
+
+
