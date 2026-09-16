@@ -4,6 +4,7 @@ import authRoutes from './routes/authRoutes.js';
 import productRoutes from './routes/productRoutes.js';
 import cartRoutes from './routes/cartRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
+import healthRoutes from './routes/health.js';
 
 const app = express();
 
@@ -16,6 +17,7 @@ app.use(
 );
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use('/api/health', healthRoutes);
 
 // Base Route - Server health check
 app.get('/', (_req, res) => {
