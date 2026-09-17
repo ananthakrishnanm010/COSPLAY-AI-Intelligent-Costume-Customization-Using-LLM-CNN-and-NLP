@@ -1,5 +1,6 @@
 @import './variables.css';
 
+/* Agrandir — brand/logo only */
 @font-face {
   font-family: 'Agrandir-TextBold';
   src: url('/fonts/Agrandir-TextBold.otf') format('opentype');
@@ -10,6 +11,57 @@
 @font-face {
   font-family: 'Agrandir';
   src: url('/fonts/Agrandir-TextBold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+}
+
+/* Helvetica — core family */
+@font-face {
+  font-family: 'Helvetica';
+  src: url('/fonts/helvetica-light-587ebe5a59211.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Helvetica';
+  src: url('/fonts/Helvetica.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Helvetica';
+  src: url('/fonts/Helvetica-Oblique.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Helvetica';
+  src: url('/fonts/Helvetica-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Helvetica';
+  src: url('/fonts/Helvetica-BoldOblique.ttf') format('truetype');
+  font-weight: 700;
+  font-style: italic;
+}
+
+/* Helvetica — stylistic variants, opt-in only */
+@font-face {
+  font-family: 'Helvetica Compressed';
+  src: url('/fonts/helvetica-compressed-5871d14b6903a.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Helvetica Rounded Bold';
+  src: url('/fonts/helvetica-rounded-bold-5871d05ead8de.otf') format('opentype');
   font-weight: 700;
   font-style: normal;
 }
@@ -151,59 +203,139 @@ nav.main-nav {
   color: var(--denim);
 }
 
-/* HERO SECTION */
-.hero {
+/* HERO CAROUSEL */
+.hero-carousel {
   position: relative;
   width: 100%;
-  height: auto !important;
-  min-height: 0 !important;
-  max-height: none !important;
-  overflow: visible !important;
+  overflow: hidden;
 }
 
-.hero img {
-  display: block;
-  width: 100% !important;
-  height: auto !important;
-  max-height: none !important;
-  object-fit: contain !important;
-  object-position: center !important;
+.hero-carousel-track {
+  position: relative;
+  width: 100%;
+}
+
+.hero-carousel-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.6s ease;
+}
+
+.hero-carousel-slide.active {
+  position: relative;
+  opacity: 1;
+  visibility: visible;
+}
+
+.hero-carousel-slide img {
+  width: 100%;
+  height: auto;
   filter: saturate(0.9) contrast(1.02);
 }
 
-.hero-caption {
+.hero-carousel-arrow {
   position: absolute;
-  left: 6%;
-  bottom: 8%;
-  max-width: 460px;
-  color: var(--ink);
-}
-
-.hero-eyebrow {
-  color: var(--ink);
-}
-
-.hero-caption h1 {
-  color: var(--ink);
-}
-
-.hero-btn {
-  display: inline-block;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.8);
   border: none;
-  padding: 0;
-  margin-top: 10px;
-  font-size: 14px;
-  font-weight: 400;
-  letter-spacing: 0.3px;
+  width: 40px;
+  height: 40px;
+  font-size: 22px;
   color: var(--ink);
-  text-decoration: none;
-  background: none;
+  cursor: pointer;
+  z-index: 10;
+  transition: background 0.2s ease;
+}
+
+.hero-carousel-arrow:hover {
+  background: rgba(255, 255, 255, 1);
+}
+
+.hero-carousel-arrow.prev {
+  left: 20px;
+}
+
+.hero-carousel-arrow.next {
+  right: 20px;
+}
+
+.hero-carousel-dots {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  z-index: 10;
+}
+
+.hero-carousel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s ease;
+}
+
+.hero-carousel-dot.active {
+  background: var(--ink);
+}
+
+/* AI DESIGN STUDIO PROMO */
+.ai-promo {
+  background: var(--bg);
+  padding: 96px 48px;
+  display: flex;
+  justify-content: center;
+  text-align: center;
+}
+
+.ai-promo-text {
+  max-width: 680px;
+}
+
+.ai-promo-text h2 {
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+  margin-bottom: 20px;
+}
+
+.ai-promo-text p {
+  font-size: 16px;
+  color: var(--ink-soft);
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+
+.ai-promo-btn {
+  display: inline-block;
+  background: var(--ink);
+  color: var(--bg);
+  border-radius: 999px;
+  padding: 12px 32px;
+  font-weight: 600;
+  font-size: 14px;
   transition: opacity 0.25s ease;
 }
 
-.hero-btn:hover {
-  color: var(--ink);
-  opacity: 0.65;
+.ai-promo-btn:hover {
+  opacity: 0.85;
+}
+
+.ai-promo-text h2 {
+  font-size: 44px;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+  margin-bottom: 20px;
 }
 
 /* SECTION HEADING */

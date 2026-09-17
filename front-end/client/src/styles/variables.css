@@ -27,10 +27,10 @@
   --text-inverse: #FFFFFF;
 
   /* Typography */
-  --font-display: 'Poppins', sans-serif;
-  --font-body: 'Poppins', sans-serif;
-  --font-sans: 'Poppins', sans-serif;
-  --font-serif: 'Poppins', sans-serif;
+  --font-display: 'Helvetica', Arial, sans-serif;
+  --font-body: 'Helvetica', Arial, sans-serif;
+  --font-sans: 'Helvetica', Arial, sans-serif;
+  --font-serif: 'Helvetica', Arial, sans-serif;
 
   /* Spacing Grid (Generous 1.5x spacing) */
   --space-2xs: 4px;
