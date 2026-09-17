@@ -1,4 +1,3 @@
-
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
@@ -13,19 +12,47 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Placeholder User model to allow compilation and baseline setups
-model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  name      String?
-  role      String   @default("customer") // "customer" | "admin"
-  orders    Order[]
-  cart      Cart?
-  reviews   Review[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// ---------------------------------------------------------------------------
+// ENUMS
+// ---------------------------------------------------------------------------
+
+enum GarmentType {
+  SHIRT
+  TSHIRT
+  JEANS
+  HOODIE
+  KURTHI
 }
+
+enum CustomDesignStatus {
+  DRAFT // user still editing prompt / measurements
+  SUBMITTED // added to cart / sent to production queue
+  IN_PRODUCTION
+  COMPLETED
+  CANCELLED
+}
+
+// ---------------------------------------------------------------------------
+// USER
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String
+  name          String?
+  role          String         @default("customer") // "customer" | "admin"
+  orders        Order[]
+  cart          Cart?
+  reviews       Review[]
+  customDesigns CustomDesign[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// CATALOG (existing "off the rack" products, kept as-is)
+// ---------------------------------------------------------------------------
 
 model Category {
   id        String    @id @default(uuid())
@@ -58,8 +85,8 @@ model ProductVariant {
   id         String      @id @default(uuid())
   productId  String
   product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  size       String      // e.g. "S", "M", "L", "XL"
-  color      String?     // e.g. "Charcoal", "Linen"
+  size       String // e.g. "S", "M", "L", "XL"
+  color      String?
   sku        String      @unique
   inventory  Int         @default(0)
   cartItems  CartItem[]
@@ -67,6 +94,111 @@ model ProductVariant {
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 }
+
+// ---------------------------------------------------------------------------
+// BRAND SIZE REFERENCE DATA
+// This is the "ground truth" sizing chart you seed for each of the 5 brands.
+// MeasurementType is reusable across brands/garments (chest, sleeve_length,
+// inseam, shoulder, etc.) so you're not hardcoding columns per garment.
+// ---------------------------------------------------------------------------
+
+model Brand {
+  id        String      @id @default(uuid())
+  name      String      @unique // e.g. "Levi's"
+  slug      String      @unique
+  sizes     BrandSize[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model MeasurementType {
+  id                 String                  @id @default(uuid())
+  key                String                  @unique // e.g. "chest", "sleeve_length", "inseam", "shoulder"
+  label              String // e.g. "Sleeve Length"
+  unit               String                  @default("inch") // "inch" | "cm"
+  brandMeasurements  BrandSizeMeasurement[]
+  alterations        CustomDesignAlteration[]
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+}
+
+// A specific size, for a specific garment type, from a specific brand.
+// e.g. Levi's + JEANS + "32"   or   Levi's + SHIRT + "M"
+model BrandSize {
+  id           String                 @id @default(uuid())
+  brandId      String
+  brand        Brand                  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  garmentType  GarmentType
+  sizeLabel    String // "S", "M", "L", "32", "34", etc.
+  measurements BrandSizeMeasurement[]
+  customDesigns CustomDesign[]
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  @@unique([brandId, garmentType, sizeLabel])
+}
+
+// The actual standard measurement values for a given brand size.
+// e.g. (Levi's, JEANS, "32") -> sleeve_length = N/A, waist = 32, inseam = 30
+model BrandSizeMeasurement {
+  id                String          @id @default(uuid())
+  brandSizeId       String
+  brandSize         BrandSize       @relation(fields: [brandSizeId], references: [id], onDelete: Cascade)
+  measurementTypeId String
+  measurementType   MeasurementType @relation(fields: [measurementTypeId], references: [id])
+  value             Float // standard measurement value, in MeasurementType.unit
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([brandSizeId, measurementTypeId])
+}
+
+// ---------------------------------------------------------------------------
+// CUSTOM DESIGN FLOW
+// User picks a garment type -> writes a customization prompt -> picks a
+// brand's standard size as the base -> optionally requests per-measurement
+// alterations against that base.
+// ---------------------------------------------------------------------------
+
+model CustomDesign {
+  id             String                   @id @default(uuid())
+  userId         String
+  user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  garmentType    GarmentType
+  designPrompt   String // free-text customization description from the user
+  referenceImages String[]                @default([]) // optional uploaded inspo images
+  baseBrandSizeId String
+  baseBrandSize   BrandSize               @relation(fields: [baseBrandSizeId], references: [id])
+  alterations    CustomDesignAlteration[]
+  status         CustomDesignStatus       @default(DRAFT)
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+}
+
+// One row per measurement the user wants to change from the brand standard.
+// e.g. measurementType = sleeve_length, adjustment = -2 (inches shorter)
+model CustomDesignAlteration {
+  id                String          @id @default(uuid())
+  customDesignId    String
+  customDesign      CustomDesign    @relation(fields: [customDesignId], references: [id], onDelete: Cascade)
+  measurementTypeId String
+  measurementType   MeasurementType @relation(fields: [measurementTypeId], references: [id])
+  adjustment        Float // signed delta in MeasurementType.unit, e.g. -2, +1.5
+  note              String? // optional free-text clarification
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([customDesignId, measurementTypeId])
+}
+
+// ---------------------------------------------------------------------------
+// CART / ORDER
+// Updated so a line item can be EITHER a standard catalog product+variant
+// OR a custom design (garment type + brand base size + alterations).
+// Enforce "exactly one of product / customDesign is set" at the app layer.
+// ---------------------------------------------------------------------------
 
 model Cart {
   id        String     @id @default(uuid())
@@ -78,24 +210,31 @@ model Cart {
 }
 
 model CartItem {
-  id        String          @id @default(uuid())
-  cartId    String
-  cart      Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
-  productId String
-  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
-  variantId String?
-  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  quantity  Int             @default(1)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  id             String          @id @default(uuid())
+  cartId         String
+  cart           Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
 
-  @@unique([cartId, productId, variantId])
+  // Standard catalog product path (optional now)
+  productId      String?
+  product        Product?        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId      String?
+  variant        ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  // Custom design path (optional)
+  customDesignId String?
+  customDesign   CustomDesign?   @relation(fields: [customDesignId], references: [id], onDelete: Cascade)
+
+  quantity       Int             @default(1)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([cartId, productId, variantId, customDesignId])
 }
 
 model Coupon {
   id            String   @id @default(uuid())
   code          String   @unique
-  discountType  String   // "percentage" | "fixed"
+  discountType  String // "percentage" | "fixed"
   discountValue Float
   minPurchase   Float    @default(0.0)
   expiryDate    DateTime
@@ -128,12 +267,19 @@ model OrderItem {
   id        String          @id @default(uuid())
   orderId   String
   order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId String
-  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Standard catalog product path (optional now)
+  productId String?
+  product   Product?        @relation(fields: [productId], references: [id], onDelete: Cascade)
   variantId String?
   variant   ProductVariant? @relation(fields: [variantId], references: [id])
+
+  // Custom design path (optional)
+  customDesignId String?
+  customDesign   CustomDesign? @relation(fields: [customDesignId], references: [id])
+
   quantity  Int
-  price     Float           // Historical price snapshot
+  price     Float // Historical price snapshot (incl. any customization surcharge)
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 }
@@ -144,7 +290,7 @@ model Review {
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  rating    Int      // 1 to 5
+  rating    Int // 1 to 5
   comment   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -154,8 +300,8 @@ model Payment {
   id            String   @id @default(uuid())
   orderId       String   @unique
   order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  paymentMethod String   // "stripe" | "cod"
-  paymentStatus String   // "pending" | "completed" | "failed"
+  paymentMethod String // "stripe" | "cod"
+  paymentStatus String // "pending" | "completed" | "failed"
   transactionId String?
   amount        Float
   createdAt     DateTime @default(now())
