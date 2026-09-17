@@ -44,3 +44,7 @@ coverage/
 # Local databases
 *.db
 *.db-journal
+
+# Uploaded reference images
+front-end/server/src/uploads/*
+!front-end/server/src/uploads/.gitkeep
