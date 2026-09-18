@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import HeroCarousel from '../components/HeroCarousel';
 
 const sampleProducts = [
   {
@@ -60,17 +61,16 @@ const sampleProducts = [
 function HomePage() {
   return (
     <>
-      {/* Hero Section */}
-      <section className="hero">
-        <img
-          src="/images/hero/hero_banner_01.png"
-          alt="Denim collection"
-        />
-        <div className="hero-caption">
-          <div className="hero-eyebrow">Autumn'26</div>
-          <h1>Express your individuality with effortless style.</h1>
-          <Link to="/products" className="hero-btn">
-            Shop The Collection
+      {/* Hero Carousel */}
+      <HeroCarousel />
+
+      {/* AI Design Studio Promo */}
+      <section className="ai-promo">
+        <div className="ai-promo-text">
+          <h2>The Creative Assistant You Deserve</h2>
+          <p>From first prompt to finished garment, design your own fit — down to the last measurement.</p>
+          <Link to="/ai-design" className="ai-promo-btn">
+            Design
           </Link>
         </div>
       </section>

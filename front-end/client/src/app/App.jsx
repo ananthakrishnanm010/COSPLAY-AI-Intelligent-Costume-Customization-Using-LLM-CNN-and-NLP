@@ -7,8 +7,12 @@ import RegisterPage from '../pages/RegisterPage';
 import ProductsPage from '../pages/ProductsPage';
 import ProductDetailPage from '../pages/ProductDetailPage';
 import CartPage from '../pages/CartPage';
+import AIDesignPage from '../pages/AIDesignPage';
 
 const router = createBrowserRouter([
+  // ==========================================
+  // NORMAL WEBSITE PAGES
+  // ==========================================
   {
     path: '/',
     element: <MainLayout />,
@@ -17,27 +21,40 @@ const router = createBrowserRouter([
         index: true,
         element: <HomePage />,
       },
+
       {
         path: 'login',
         element: <LoginPage />,
       },
+
       {
         path: 'register',
         element: <RegisterPage />,
       },
+
       {
         path: 'products',
         element: <ProductsPage />,
       },
+
       {
         path: 'products/:slug',
         element: <ProductDetailPage />,
       },
+
       {
         path: 'cart',
         element: <CartPage />,
       },
     ],
+  },
+
+  // ==========================================
+  // COSPLAY DESIGN STUDIO
+  // ==========================================
+  {
+    path: '/ai-design',
+    element: <AIDesignPage />,
   },
 ]);
 

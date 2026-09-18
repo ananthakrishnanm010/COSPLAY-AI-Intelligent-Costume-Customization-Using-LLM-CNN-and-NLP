@@ -1,0 +1,375 @@
+.size-adjuster {
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px;
+    border: 1px solid #e5e5e5;
+    border-radius: 20px;
+    background: #ffffff;
+    box-sizing: border-box;
+}
+
+
+/* ==========================================
+   HEADER
+========================================== */
+
+.size-adjuster-header {
+    margin-bottom: 20px;
+}
+
+.size-adjuster-header h2 {
+    margin: 0 0 6px;
+    font-size: 22px;
+    font-weight: 600;
+    color: #111111;
+}
+
+.size-adjuster-header p {
+    margin: 0;
+    color: #777777;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+
+/* ==========================================
+   MAIN LAYOUT
+========================================== */
+
+.size-adjuster-content {
+    display: grid;
+    grid-template-columns: minmax(300px, 1fr) minmax(280px, 1fr);
+    gap: 32px;
+    align-items: center;
+}
+
+
+/* ==========================================
+   SHIRT PREVIEW
+========================================== */
+
+.shirt-preview {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    min-height: 390px;
+
+    border-radius: 16px;
+
+    background: #f7f7f7;
+
+    overflow: hidden;
+}
+
+.shirt-svg {
+    width: 100%;
+    max-width: 400px;
+    height: 380px;
+}
+
+.shirt-body {
+    fill: #222222;
+
+    stroke: #111111;
+
+    stroke-width: 3;
+
+    stroke-linejoin: round;
+
+    transition: all 0.25s ease;
+}
+
+.shirt-neck {
+    fill: none;
+
+    stroke: #111111;
+
+    stroke-width: 5;
+
+    stroke-linecap: round;
+}
+
+.shirt-shadow {
+    fill: #dddddd;
+
+    opacity: 0.5;
+}
+
+.shirt-design {
+    fill: #ffffff;
+
+    font-size: 18px;
+
+    font-weight: 600;
+
+    letter-spacing: 2px;
+}
+
+
+/* ==========================================
+   CONTROLS CONTAINER
+========================================== */
+
+.size-controls-container {
+    display: flex;
+
+    flex-direction: column;
+
+    justify-content: center;
+}
+
+
+/* ==========================================
+   CURRENT VALUES
+========================================== */
+
+.size-values {
+    display: flex;
+
+    flex-wrap: wrap;
+
+    gap: 8px;
+
+    margin-bottom: 24px;
+}
+
+.size-values span {
+    padding: 6px 10px;
+
+    border-radius: 8px;
+
+    background: #f1f1f1;
+
+    color: #555555;
+
+    font-size: 12px;
+}
+
+
+/* ==========================================
+   SLIDERS
+========================================== */
+
+.size-controls {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 20px;
+}
+
+.slider-row {
+    width: 100%;
+}
+
+.slider-label {
+    display: flex;
+
+    justify-content: space-between;
+
+    margin-bottom: 8px;
+
+    font-size: 14px;
+
+    color: #333333;
+}
+
+.slider-label span:last-child {
+    color: #777777;
+
+    font-size: 13px;
+}
+
+.slider-row input[type='range'] {
+    width: 100%;
+
+    cursor: pointer;
+
+    accent-color: #111111;
+}
+
+
+/* ==========================================
+   BUTTONS
+========================================== */
+
+.size-actions {
+    display: flex;
+
+    justify-content: flex-end;
+
+    gap: 10px;
+
+    margin-top: 28px;
+}
+
+.size-actions button {
+    padding: 10px 18px;
+
+    border-radius: 10px;
+
+    font-size: 14px;
+
+    cursor: pointer;
+
+    transition: all 0.2s ease;
+}
+
+.reset-size-btn {
+    border: 1px solid #dddddd;
+
+    background: #ffffff;
+
+    color: #333333;
+}
+
+.reset-size-btn:hover {
+    background: #f5f5f5;
+}
+
+.save-size-btn {
+    border: none;
+
+    background: #111111;
+
+    color: #ffffff;
+}
+
+.save-size-btn:hover {
+    background: #333333;
+}
+
+
+/* ==========================================
+   MOBILE
+========================================== */
+
+@media (max-width: 700px) {
+
+    .size-adjuster {
+        padding: 16px;
+
+        border-radius: 16px;
+    }
+
+    .size-adjuster-content {
+        grid-template-columns: 1fr;
+
+        gap: 20px;
+    }
+
+    .shirt-preview {
+        min-height: 320px;
+    }
+
+    .shirt-svg {
+        height: 320px;
+    }
+
+    .size-actions {
+        flex-direction: column;
+    }
+
+    .size-actions button {
+        width: 100%;
+    }
+}
+
+/* ==========================================
+   CHAT CONTAINER FIX
+========================================== */
+
+.size-adjuster-message {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+
+/* Make the size adjuster stay inside
+   the chat message */
+
+.size-adjuster {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+
+/* Allow the two columns to shrink
+   instead of overflowing */
+
+.size-adjuster-content {
+    display: grid;
+
+    grid-template-columns:
+        minmax(0, 45%) minmax(0, 55%);
+
+    gap: 20px;
+
+    align-items: center;
+
+    width: 100%;
+    max-width: 100%;
+
+    min-width: 0;
+
+    box-sizing: border-box;
+}
+
+
+/* Prevent the preview from forcing
+   the container wider */
+
+.shirt-preview {
+    display: flex;
+
+    justify-content: center;
+    align-items: center;
+
+    width: 100%;
+    min-width: 0;
+
+    min-height: 360px;
+
+    border-radius: 16px;
+
+    background: #f7f7f7;
+
+    overflow: hidden;
+
+    box-sizing: border-box;
+}
+
+
+/* Prevent the controls from forcing
+   the container wider */
+
+.size-controls-container {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+
+/* Make sure sliders never exceed
+   their column */
+
+.slider-row {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.slider-row input[type='range'] {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}

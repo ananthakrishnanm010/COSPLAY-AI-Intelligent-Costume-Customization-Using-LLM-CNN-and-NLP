@@ -1,1 +1,250 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows"]
+  engineType    = "binary"
+}
 
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum GarmentType {
+  SHIRT
+  TSHIRT
+  JEANS
+  HOODIE
+}
+
+model Brand {
+  id        String      @id @default(uuid())
+  name      String      @unique
+  slug      String      @unique
+  sizes     BrandSize[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model MeasurementType {
+  id                      String                   @id @default(uuid())
+  key                     String                   @unique
+  label                   String
+  unit                    String                   @default("inch")
+  brandMeasurements       BrandSizeMeasurement[]
+  customDesignAlterations CustomDesignAlteration[]
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+}
+
+model BrandSize {
+  id            String                 @id @default(uuid())
+  brandId       String
+  brand         Brand                  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  garmentType   GarmentType
+  sizeLabel     String
+  measurements  BrandSizeMeasurement[]
+  customDesigns CustomDesign[]
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@unique([brandId, garmentType, sizeLabel])
+}
+
+model BrandSizeMeasurement {
+  id                String          @id @default(uuid())
+  brandSizeId       String
+  brandSize         BrandSize       @relation(fields: [brandSizeId], references: [id], onDelete: Cascade)
+  measurementTypeId String
+  measurementType   MeasurementType @relation(fields: [measurementTypeId], references: [id])
+  value             Float
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([brandSizeId, measurementTypeId])
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String
+  name          String?
+  role          String         @default("customer")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  cart          Cart?
+  orders        Order[]
+  reviews       Review[]
+  customDesigns CustomDesign[]
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+}
+
+model Product {
+  id             String           @id @default(uuid())
+  name           String
+  slug           String           @unique
+  description    String
+  price          Float
+  compareAtPrice Float?
+  categoryId     String
+  images         String[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
+  category       Category         @relation(fields: [categoryId], references: [id])
+  variants       ProductVariant[]
+  reviews        Review[]
+}
+
+model ProductVariant {
+  id         String      @id @default(uuid())
+  productId  String
+  size       String
+  color      String?
+  sku        String      @unique
+  inventory  Int         @default(0)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Cart {
+  id        String     @id @default(uuid())
+  userId    String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+}
+
+model CartItem {
+  id        String          @id @default(uuid())
+  cartId    String
+  productId String
+  variantId String?
+  quantity  Int             @default(1)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  cart      Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId, variantId])
+}
+
+model Coupon {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  discountType  String
+  discountValue Float
+  minPurchase   Float    @default(0.0)
+  expiryDate    DateTime
+  usageLimit    Int?
+  usedCount     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  orders        Order[]
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  userId          String
+  status          String      @default("pending")
+  totalAmount     Float
+  subtotal        Float
+  discountAmount  Float       @default(0.0)
+  couponId        String?
+  shippingAddress String
+  billingAddress  String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  coupon          Coupon?     @relation(fields: [couponId], references: [id])
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items           OrderItem[]
+  payment         Payment?
+}
+
+model OrderItem {
+  id        String          @id @default(uuid())
+  orderId   String
+  productId String
+  variantId String?
+  quantity  Int
+  price     Float
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  productId String
+  userId    String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  orderId       String   @unique
+  paymentMethod String
+  paymentStatus String
+  transactionId String?
+  amount        Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model CustomDesign {
+  id              String      @id @default(uuid())
+  userId          String
+  garmentType     GarmentType
+  designPrompt    String
+  referenceImages String[]
+  baseBrandSizeId String
+
+  user          User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  baseBrandSize BrandSize                @relation(fields: [baseBrandSizeId], references: [id])
+  alterations   CustomDesignAlteration[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CustomDesignAlteration {
+  id                String @id @default(uuid())
+  customDesignId    String
+  measurementTypeId String
+
+  alterationType String
+  adjustment     Float
+  baseValue      Float
+  finalValue     Float
+
+  customDesign    CustomDesign    @relation(fields: [customDesignId], references: [id], onDelete: Cascade)
+  measurementType MeasurementType @relation(fields: [measurementTypeId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customDesignId])
+  @@index([measurementTypeId])
+}
