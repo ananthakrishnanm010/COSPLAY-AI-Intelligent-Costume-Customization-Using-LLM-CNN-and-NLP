@@ -8,6 +8,9 @@ import productRoutes from './routes/productRoutes.js';
 import cartRoutes from './routes/cartRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import healthRoutes from './routes/health.js';
+import brandRoutes from './routes/brandRoutes.js';
+import sizeRoutes from './routes/sizeRoutes.js';
+import customDesignRoutes from './routes/customDesignRoutes.js';
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -27,6 +30,9 @@ app.use(
   express.static(path.join(__dirname, 'uploads'))
 );
 app.use('/api/health', healthRoutes);
+app.use('/api/v1/brands', brandRoutes);
+app.use('/api/v1/sizes', sizeRoutes);
+app.use('/api/v1/custom-designs', customDesignRoutes);
 
 // Base Route - Server health check
 app.get('/', (_req, res) => {

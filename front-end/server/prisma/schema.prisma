@@ -5,8 +5,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
@@ -27,24 +27,26 @@ model Brand {
 }
 
 model MeasurementType {
-  id                 String                  @id @default(uuid())
-  key                String                  @unique
-  label              String
-  unit               String                  @default("inch")
-  brandMeasurements  BrandSizeMeasurement[]
-  createdAt          DateTime                @default(now())
-  updatedAt          DateTime                @updatedAt
+  id                      String                   @id @default(uuid())
+  key                     String                   @unique
+  label                   String
+  unit                    String                   @default("inch")
+  brandMeasurements       BrandSizeMeasurement[]
+  customDesignAlterations CustomDesignAlteration[]
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
 }
 
 model BrandSize {
-  id           String                  @id @default(uuid())
-  brandId      String
-  brand        Brand                   @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  garmentType  GarmentType
-  sizeLabel    String
-  measurements BrandSizeMeasurement[]
-  createdAt    DateTime                @default(now())
-  updatedAt    DateTime                @updatedAt
+  id            String                 @id @default(uuid())
+  brandId       String
+  brand         Brand                  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  garmentType   GarmentType
+  sizeLabel     String
+  measurements  BrandSizeMeasurement[]
+  customDesigns CustomDesign[]
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
 
   @@unique([brandId, garmentType, sizeLabel])
 }
@@ -63,16 +65,17 @@ model BrandSizeMeasurement {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  name      String?
-  role      String   @default("customer")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  cart      Cart?
-  orders    Order[]
-  reviews   Review[]
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String
+  name          String?
+  role          String         @default("customer")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  cart          Cart?
+  orders        Order[]
+  reviews       Review[]
+  customDesigns CustomDesign[]
 }
 
 model Category {
@@ -208,4 +211,40 @@ model Payment {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model CustomDesign {
+  id              String      @id @default(uuid())
+  userId          String
+  garmentType     GarmentType
+  designPrompt    String
+  referenceImages String[]
+  baseBrandSizeId String
+
+  user          User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  baseBrandSize BrandSize                @relation(fields: [baseBrandSizeId], references: [id])
+  alterations   CustomDesignAlteration[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CustomDesignAlteration {
+  id                String @id @default(uuid())
+  customDesignId    String
+  measurementTypeId String
+
+  alterationType String
+  adjustment     Float
+  baseValue      Float
+  finalValue     Float
+
+  customDesign    CustomDesign    @relation(fields: [customDesignId], references: [id], onDelete: Cascade)
+  measurementType MeasurementType @relation(fields: [measurementTypeId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customDesignId])
+  @@index([measurementTypeId])
 }
