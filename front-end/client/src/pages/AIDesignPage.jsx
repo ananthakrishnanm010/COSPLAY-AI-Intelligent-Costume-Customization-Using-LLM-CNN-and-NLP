@@ -1,1853 +1,346 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import './AIDesignPage.css';
 import SizeAdjuster from '../components/size-adjuster/SizeAdjuster';
+import apiClient from '../services/apiClient';
+import { useAuth } from '../contexts/AuthContext';
+
+// ============================================================
+// CONSTANTS — aligned with backend enum
+// ============================================================
+
+const GARMENT_TYPES = [
+    { label: 'T-Shirt',  enum: 'TSHIRT'  },
+    { label: 'Shirt',    enum: 'SHIRT'   },
+    { label: 'Hoodie',   enum: 'HOODIE'  },
+    { label: 'Jeans',    enum: 'JEANS'   },
+];
+
+// ============================================================
+// WORKFLOW STEPS
+// ============================================================
+
+const STEPS = {
+    GARMENT:     0,
+    BRAND:       1,
+    SIZE:        2,
+    MEASUREMENT: 3,
+    DESIGN:      4,
+    REVIEW:      5,
+};
+
+const STEP_LABELS = ['Garment', 'Brand', 'Size', 'Fit', 'Design', 'Review'];
+
+// ============================================================
+// INITIAL STATE
+// ============================================================
+
+const initialDesignState = {
+    // Selection
+    garmentTypeEnum:    null,   // 'TSHIRT' | 'SHIRT' | 'HOODIE' | 'JEANS'
+    garmentLabel:       null,   // display label
+
+    // Brand / Size from API
+    brandId:            null,
+    brandName:          null,
+    sizeId:             null,
+    sizeLabel:          null,
+    brandMeasurements:  [],
+    alterations:        [],
+    adjustments:        {},
+    fitConfirmed:       false,
+
+    // Design options
+    color:              null,
+    fit:                null,
+    style:              null,
+    design:             null,
+    placement:          null,
+    creativePrompt:     '',
+    referenceImage:     null,   // { file: File, dataUrl: string, name: string }
+};
+
+// ============================================================
+// COMPONENT
+// ============================================================
 
 function AIDesignPage() {
+    let user = null;
+    try {
+        const auth = useAuth();
+        user = auth?.user;
+    } catch {
+        // Fallback if rendered outside AuthProvider
+    }
 
-    // ==========================================
-    // CONVERSATION
-    // ==========================================
+    // ── state ───────────────────────────────────────────────
 
-    const [messages, setMessages] = useState([]);
-    const [input, setInput] = useState('');
-    const [isTyping, setIsTyping] = useState(false);
+    const [step, setStep]                     = useState(STEPS.GARMENT);
+    const [designState, setDesignState]       = useState(initialDesignState);
 
-    const messagesEndRef = useRef(null);
+    // Brand / Size lists loaded from API
+    const [brands, setBrands]                 = useState([]);
+    const [brandsLoading, setBrandsLoading]   = useState(false);
+    const [brandsError, setBrandsError]       = useState(null);
 
+    const [sizes, setSizes]                   = useState([]);
+    const [sizesLoading, setSizesLoading]     = useState(false);
+    const [sizesError, setSizesError]         = useState(null);
 
-    // ==========================================
-    // DESIGN REQUIREMENTS
-    // ==========================================
+    const [measLoading, setMeasLoading]       = useState(false);
+    const [measError, setMeasError]           = useState(null);
 
-    const [designRequirements, setDesignRequirements] = useState({
-        garment: null,
-        color: null,
-        fit: null,
-        design: null,
-        style: null,
-        placement: null,
+    // Size adjuster panel
+    const [showSizeAdjuster, setShowSizeAdjuster] = useState(false);
 
-        // SIZE
-        sizeType: null,
-        referenceBrand: null,
-        referenceSize: null,
-        sizeSatisfied: null,
-        sizeAdjusted: false,
+    // Generation
+    const [isGenerating, setIsGenerating]     = useState(false);
+    const [generationStep, setGenerationStep] = useState(0);
+    const [generationComplete, setGenerationComplete] = useState(false);
+    const [generationPayload, setGenerationPayload]   = useState(null);
 
-        // SIZE SLIDER ADJUSTMENTS
-        adjustments: {
-            chest: 0,
-            waist: 0,
-            shoulder: 0,
-            length: 0,
-            sleeve: 0,
-        },
+    const referenceInputRef = useRef(null);
+    const topRef            = useRef(null);
 
-        // CUSTOM MEASUREMENTS
-        measurements: {
-            chest: null,
-            waist: null,
-            shoulder: null,
-            length: null,
-        },
-    });
+    // ── helpers ─────────────────────────────────────────────
 
+    const update = (patch) => setDesignState((prev) => ({ ...prev, ...patch }));
 
-    // ==========================================
-    // CONVERSATION STATUS
-    // ==========================================
+    const scrollTop = () =>
+        topRef.current?.scrollIntoView({ behavior: 'smooth' });
 
-    const [conversationStatus, setConversationStatus] =
-        useState('welcome');
+    const goTo = (s) => { setStep(s); scrollTop(); };
 
+    // ── step 0 → 1: garment selected ────────────────────────
 
-    // ==========================================
-    // SIZE ADJUSTER
-    // ==========================================
+    const selectGarment = (g) => {
+        update({
+            ...initialDesignState,
+            garmentTypeEnum: g.enum,
+            garmentLabel:    g.label,
+        });
+        setBrands([]);
+        setSizes([]);
+        setBrandsError(null);
+        setSizesError(null);
+        setMeasError(null);
+        setShowSizeAdjuster(false);
+        goTo(STEPS.BRAND);
+    };
 
-    const [showSizeAdjuster, setShowSizeAdjuster] =
-        useState(false);
-
-
-    // ==========================================
-    // CONFIRMATION / CHANGE / GENERATION
-    // ==========================================
-
-    const [showConfirmation, setShowConfirmation] =
-        useState(false);
-
-    const [isGenerating, setIsGenerating] =
-        useState(false);
-
-    const [changeMode, setChangeMode] =
-        useState(false);
-
-    const [pendingChange, setPendingChange] =
-        useState(null);
-
-    const [generationStep, setGenerationStep] =
-        useState(0);
-
-    const [generationComplete, setGenerationComplete] =
-        useState(false);
-
-
-    // ==========================================
-    // AUTO SCROLL
-    // ==========================================
+    // ── step 1: load brands when entering brand step ─────────
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({
-            behavior: 'smooth',
-        });
-    }, [
-        messages,
-        isTyping,
-        showSizeAdjuster,
-        isGenerating,
-    ]);
-
-
-    // ==========================================
-    // EXTRACT INFORMATION
-    // ==========================================
-
-    const extractInformation = (
-        userMessage,
-        currentRequirements
-    ) => {
-
-        const message = userMessage
-            .toLowerCase()
-            .trim()
-            .replace(/[’‘]/g, "'");
-
-
-        const updatedRequirements = {
-            ...currentRequirements,
-
-            adjustments: {
-                ...currentRequirements.adjustments,
-            },
-
-            measurements: {
-                ...currentRequirements.measurements,
-            },
-        };
-
-
-        // ==========================================
-        // GARMENT
-        // ==========================================
-
-        if (
-            message.includes('t-shirt') ||
-            message.includes('tshirt') ||
-            message.includes('tee')
-        ) {
-            updatedRequirements.garment = 'T-shirt';
-        }
-
-        else if (message.includes('hoodie')) {
-            updatedRequirements.garment = 'Hoodie';
-        }
-
-        else if (message.includes('jacket')) {
-            updatedRequirements.garment = 'Jacket';
-        }
-
-        else if (message.includes('coat')) {
-            updatedRequirements.garment = 'Coat';
-        }
-
-        else if (message.includes('shirt')) {
-            updatedRequirements.garment = 'Shirt';
-        }
-
-        else if (message.includes('dress')) {
-            updatedRequirements.garment = 'Dress';
-        }
-
-        else if (
-            message.includes('pants') ||
-            message.includes('trousers')
-        ) {
-            updatedRequirements.garment = 'Pants';
-        }
-
-        else if (message.includes('skirt')) {
-            updatedRequirements.garment = 'Skirt';
-        }
-
-
-        // ==========================================
-        // COLOR
-        // ==========================================
-
-        const colors = [
-            'black',
-            'white',
-            'red',
-            'blue',
-            'green',
-            'yellow',
-            'orange',
-            'purple',
-            'pink',
-            'grey',
-            'gray',
-            'brown',
-            'beige',
-            'navy',
-            'maroon',
-            'cream',
-        ];
-
-        for (const color of colors) {
-
-            if (message.includes(color)) {
-
-                updatedRequirements.color =
-                    color === 'gray'
-                        ? 'grey'
-                        : color;
-
-                break;
-            }
-        }
-
-
-        // ==========================================
-        // FIT
-        // ==========================================
-
-        if (
-            message.includes('oversized') ||
-            message.includes('oversize') ||
-            message.includes('baggy') ||
-            message.includes('loose fit') ||
-            message.includes('loose-fitting') ||
-            message.includes('loose fitting') ||
-            /\bloose\b/.test(message)
-        ) {
-            updatedRequirements.fit =
-                'Oversized / Loose';
-        }
-
-        else if (
-            message.includes('slim fit') ||
-            message.includes('slim')
-        ) {
-            updatedRequirements.fit = 'Slim';
-        }
-
-        else if (
-            message.includes('regular fit') ||
-            message.includes('regular')
-        ) {
-            updatedRequirements.fit = 'Regular';
-        }
-
-        else if (
-            message.includes('relaxed') ||
-            message.includes('comfortable fit')
-        ) {
-            updatedRequirements.fit = 'Relaxed';
-        }
-
-
-        // ==========================================
-        // STYLE
-        // ==========================================
-
-        if (message.includes('anime')) {
-            updatedRequirements.style =
-                'Anime-inspired';
-        }
-
-        else if (message.includes('cyberpunk')) {
-            updatedRequirements.style =
-                'Cyberpunk';
-        }
-
-        else if (message.includes('futuristic')) {
-            updatedRequirements.style =
-                'Futuristic';
-        }
-
-        else if (
-            message.includes('realistic') ||
-            message.includes('photorealistic')
-        ) {
-            updatedRequirements.style =
-                'Realistic';
-        }
-
-        else if (message.includes('tribal')) {
-            updatedRequirements.style =
-                'Tribal';
-        }
-
-        else if (
-            message.includes('minimal') ||
-            message.includes('minimalist')
-        ) {
-            updatedRequirements.style =
-                'Minimal';
-        }
-
-        else if (message.includes('cartoon')) {
-            updatedRequirements.style =
-                'Cartoon';
-        }
-
-        else if (
-            message.includes('graffiti') ||
-            message.includes('street art')
-        ) {
-            updatedRequirements.style =
-                'Graffiti / Street Art';
-        }
-
-
-        // ==========================================
-        // DESIGN
-        // ==========================================
-
-        if (message.includes('dragon')) {
-            updatedRequirements.design =
-                'Dragon';
-        }
-
-        else if (message.includes('skull')) {
-            updatedRequirements.design =
-                'Skull';
-        }
-
-        else if (
-            message.includes('flame') ||
-            message.includes('fire')
-        ) {
-            updatedRequirements.design =
-                'Flame';
-        }
-
-        else if (
-            message.includes('flower') ||
-            message.includes('floral')
-        ) {
-            updatedRequirements.design =
-                'Flower';
-        }
-
-        else if (message.includes('logo')) {
-            updatedRequirements.design =
-                'Logo';
-        }
-
-        else if (message.includes('samurai')) {
-            updatedRequirements.design =
-                'Samurai';
-        }
-
-        else if (message.includes('wolf')) {
-            updatedRequirements.design =
-                'Wolf';
-        }
-
-        else if (message.includes('tiger')) {
-            updatedRequirements.design =
-                'Tiger';
-        }
-
-        else if (message.includes('phoenix')) {
-            updatedRequirements.design =
-                'Phoenix';
-        }
-
-
-        // ==========================================
-        // PLACEMENT
-        // ==========================================
-
-        if (
-            message.includes('front') &&
-            message.includes('back')
-        ) {
-            updatedRequirements.placement =
-                'Front and Back';
-        }
-
-        else if (message.includes('back')) {
-            updatedRequirements.placement =
-                'Back';
-        }
-
-        else if (message.includes('sleeve')) {
-            updatedRequirements.placement =
-                'Sleeve';
-        }
-
-        else if (message.includes('chest')) {
-            updatedRequirements.placement =
-                'Front / Chest';
-        }
-
-        else if (message.includes('front')) {
-            updatedRequirements.placement =
-                'Front';
-        }
-
-
-        // ==========================================
-        // CUSTOM SIZE
-        // ==========================================
-
-        if (
-            message.includes('custom size') ||
-            message.includes('custom measurements') ||
-            message.includes('custom fit') ||
-            message === 'custom'
-        ) {
-            updatedRequirements.sizeType =
-                'custom';
-
-            updatedRequirements.sizeSatisfied =
-                false;
-        }
-
-
-        // ==========================================
-        // REFERENCE BRAND
-        // ==========================================
-
-        const knownBrands = [
-            {
-                pattern: /\blevi'?s\b|\blevis\b/,
-                name: "Levi's",
-            },
-            {
-                pattern: /\bnike\b/,
-                name: 'Nike',
-            },
-            {
-                pattern: /\badidas\b/,
-                name: 'Adidas',
-            },
-            {
-                pattern: /\bpuma\b/,
-                name: 'Puma',
-            },
-            {
-                pattern: /\bh&m\b/,
-                name: 'H&M',
-            },
-            {
-                pattern: /\bzara\b/,
-                name: 'Zara',
-            },
-            {
-                pattern: /\buniqlo\b/,
-                name: 'Uniqlo',
-            },
-            {
-                pattern: /\broadster\b/,
-                name: 'Roadster',
-            },
-            {
-                pattern: /\bhrx\b/,
-                name: 'HRX',
-            },
-            {
-                pattern: /\bwrangler\b/,
-                name: 'Wrangler',
-            },
-            {
-                pattern: /\bgap\b/,
-                name: 'Gap',
-            },
-        ];
-
-        for (const brand of knownBrands) {
-
-            if (brand.pattern.test(message)) {
-
-                updatedRequirements.referenceBrand =
-                    brand.name;
-
-                break;
-            }
-        }
-
-
-        // ==========================================
-        // REFERENCE SIZE
-        // ==========================================
-
-        const referenceSizeMatch =
-            message.match(
-                /\b(xs|s|m|l|xl|xxl|xxxl|2xl|3xl|extra small|small|medium|large|extra large|xx-large)\b/
-            );
-
-
-        if (referenceSizeMatch) {
-
-            let size =
-                referenceSizeMatch[1];
-
-
-            if (size === 'extra small') {
-                size = 'XS';
-            }
-
-            else if (size === 'small') {
-                size = 'S';
-            }
-
-            else if (size === 'medium') {
-                size = 'M';
-            }
-
-            else if (size === 'large') {
-                size = 'L';
-            }
-
-            else if (size === 'extra large') {
-                size = 'XL';
-            }
-
-            else if (
-                size === 'xx-large' ||
-                size === '2xl'
-            ) {
-                size = 'XXL';
-            }
-
-            else if (size === '3xl') {
-                size = 'XXXL';
-            }
-
-            else {
-                size = size.toUpperCase();
-            }
-
-
-            updatedRequirements.referenceSize =
-                size;
-
-
-            if (!updatedRequirements.sizeType) {
-                updatedRequirements.sizeType =
-                    size;
-            }
-        }
-
-
-        // ==========================================
-        // CUSTOM MEASUREMENTS
-        // ==========================================
-
-        const chestMatch =
-            message.match(
-                /chest\s*[:\-]?\s*(\d+(?:\.\d+)?)/
-            );
-
-        const waistMatch =
-            message.match(
-                /waist\s*[:\-]?\s*(\d+(?:\.\d+)?)/
-            );
-
-        const shoulderMatch =
-            message.match(
-                /shoulder\s*[:\-]?\s*(\d+(?:\.\d+)?)/
-            );
-
-        const lengthMatch =
-            message.match(
-                /length\s*[:\-]?\s*(\d+(?:\.\d+)?)/
-            );
-
-
-        if (chestMatch) {
-
-            updatedRequirements.measurements.chest =
-                Number(chestMatch[1]);
-
-            updatedRequirements.sizeType =
-                'custom';
-        }
-
-
-        if (waistMatch) {
-
-            updatedRequirements.measurements.waist =
-                Number(waistMatch[1]);
-
-            updatedRequirements.sizeType =
-                'custom';
-        }
-
-
-        if (shoulderMatch) {
-
-            updatedRequirements.measurements.shoulder =
-                Number(shoulderMatch[1]);
-
-            updatedRequirements.sizeType =
-                'custom';
-        }
-
-
-        if (lengthMatch) {
-
-            updatedRequirements.measurements.length =
-                Number(lengthMatch[1]);
-
-            updatedRequirements.sizeType =
-                'custom';
-        }
-
-
-        return updatedRequirements;
-    };
-
-
-    // ==========================================
-    // DETERMINE NEXT QUESTION
-    // ==========================================
-
-    const getNextQuestion = (requirements) => {
-
-        // GARMENT
-
-        if (!requirements.garment) {
-
-            return {
-                key: 'garment',
-
-                question:
-                    'What type of clothing would you like to create? For example, a T-shirt, hoodie, jacket, or full cosplay outfit.',
-            };
-        }
-
-
-        // COLOR
-
-        if (!requirements.color) {
-
-            return {
-                key: 'color',
-
-                question:
-                    'What color or color combination would you like for the design?',
-            };
-        }
-
-
-        // FIT
-
-        if (!requirements.fit) {
-
-            return {
-                key: 'fit',
-
-                question:
-                    'What kind of fit would you like — regular, slim, oversized, or something else?',
-            };
-        }
-
-
-        // DESIGN
-
-        if (!requirements.design) {
-
-            return {
-                key: 'design',
-
-                question:
-                    'What design or artwork would you like on the clothing?',
-            };
-        }
-
-
-        // STYLE
-
-        if (!requirements.style) {
-
-            return {
-                key: 'style',
-
-                question:
-                    'What visual style would you like for the design? For example, anime-inspired, cyberpunk, realistic, futuristic, or something else.',
-            };
-        }
-
-
-        // PLACEMENT
-
-        if (!requirements.placement) {
-
-            return {
-                key: 'placement',
-
-                question:
-                    'Where would you like the design to appear — front, back, or both?',
-            };
-        }
-
-
-        // ==========================================
-        // SIZE REFERENCE
-        // ==========================================
-
-        if (
-            requirements.sizeType !== 'custom'
-        ) {
-
-            if (
-                !requirements.referenceBrand ||
-                !requirements.referenceSize
-            ) {
-
-                return {
-                    key: 'sizeReference',
-
-                    question:
-                        "What size do you normally wear for this type of clothing? If possible, tell me a brand and size you already wear comfortably, for example: Levi's Small.",
-                };
-            }
-        }
-
-
-        // ==========================================
-        // CUSTOM SIZE
-        // ==========================================
-
-        if (
-            requirements.sizeType === 'custom' &&
-            !requirements.sizeAdjusted
-        ) {
-
-            return {
-                key: 'sizeAdjustment',
-
-                question:
-                    'No problem. I can help you adjust the fit visually using the size adjustment panel.',
-            };
-        }
-
-
-        // ==========================================
-        // SIZE SATISFACTION
-        // ==========================================
-
-        if (
-            requirements.sizeSatisfied === null
-        ) {
-
-            return {
-                key: 'sizeSatisfaction',
-
-                question:
-                    `Are you satisfied with the fit of your ${requirements.referenceBrand} ${requirements.referenceSize}, or would you like to make some adjustments?`,
-            };
-        }
-
-
-        // ==========================================
-        // SIZE ADJUSTMENT
-        // ==========================================
-
-        if (
-            requirements.sizeSatisfied === false &&
-            !requirements.sizeAdjusted
-        ) {
-
-            return {
-                key: 'sizeAdjustment',
-
-                question:
-                    'No problem. I can help you adjust the fit visually using the size adjustment panel.',
-            };
-        }
-
-
-        return null;
-    };
-
-
-    // ==========================================
-    // DETECT SIZE SATISFACTION
-    // ==========================================
-
-    const detectSizeSatisfaction = (
-        userMessage
-    ) => {
-
-        const message =
-            userMessage
-                .toLowerCase()
-                .trim();
-
-
-        const negativeWords = [
-            'no',
-            'not satisfied',
-            'not happy',
-            "don't like",
-            'adjust',
-            'adjustment',
-            'change',
-            'different',
-            'looser',
-            'tighter',
-            'bigger',
-            'smaller',
-            'longer',
-            'shorter',
-        ];
-
-
-        const positiveWords = [
-            'yes',
-            'satisfied',
-            'happy',
-            'good',
-            'perfect',
-            'fine',
-            'comfortable',
-            'keep it',
-            'use this',
-            'same',
-            'no changes',
-        ];
-
-
-        const hasNegative =
-            negativeWords.some(
-                (word) =>
-                    message.includes(word)
-            );
-
-
-        const hasPositive =
-            positiveWords.some(
-                (word) =>
-                    message.includes(word)
-            );
-
-
-        if (hasNegative) {
-            return false;
-        }
-
-
-        if (hasPositive) {
-            return true;
-        }
-
-
-        return null;
-    };
-
-
-    // ==========================================
-    // PROCESS USER MESSAGE
-    // ==========================================
-
-    const processUserMessage = (
-        userMessage,
-        currentRequirements
-    ) => {
-
-        let updatedRequirements =
-            extractInformation(
-                userMessage,
-                currentRequirements
-            );
-
-
-        // ==========================================
-        // CUSTOM SIZE
-        // ==========================================
-
-        if (
-            updatedRequirements.sizeType ===
-            'custom'
-        ) {
-
-            updatedRequirements = {
-                ...updatedRequirements,
-
-                sizeSatisfied: false,
-
-                sizeAdjusted: false,
-            };
-        }
-
-
-        // ==========================================
-        // SIZE SATISFACTION
-        // ==========================================
-
-        if (
-            updatedRequirements.referenceSize &&
-            updatedRequirements.sizeSatisfied === null
-        ) {
-
-            const satisfaction =
-                detectSizeSatisfaction(
-                    userMessage
+        if (step !== STEPS.BRAND || !designState.garmentTypeEnum) return;
+
+        setBrandsLoading(true);
+        setBrandsError(null);
+
+        apiClient
+            .get('/brands')
+            .then((res) => {
+                const all = res.data?.data || [];
+                setBrands(all);
+                if (all.length === 0) {
+                    setBrandsError('No brands are available for this garment type.');
+                }
+            })
+            .catch((err) => {
+                console.error('Brands fetch error:', err);
+                setBrandsError(
+                    err?.response?.data?.message ||
+                    'Unable to load brands. Please try again.'
                 );
+            })
+            .finally(() => setBrandsLoading(false));
+    }, [step, designState.garmentTypeEnum]);
 
+    // ── step 1 → 2: brand selected ──────────────────────────
 
-            if (satisfaction !== null) {
-
-                updatedRequirements = {
-                    ...updatedRequirements,
-
-                    sizeSatisfied:
-                        satisfaction,
-                };
-            }
-        }
-
-
-        // ==========================================
-        // USER WANTS ADJUSTMENT
-        // ==========================================
-
-        if (
-            updatedRequirements.sizeSatisfied ===
-            false
-        ) {
-
-            updatedRequirements = {
-                ...updatedRequirements,
-
-                sizeAdjusted: false,
-            };
-        }
-
-
-        const nextQuestion =
-            getNextQuestion(
-                updatedRequirements
-            );
-
-
-        return {
-            updatedRequirements,
-            nextQuestion,
-        };
+    const selectBrand = (brand) => {
+        update({ brandId: brand.id, brandName: brand.name, sizeId: null, sizeLabel: null });
+        setSizes([]);
+        setSizesError(null);
+        goTo(STEPS.SIZE);
     };
 
+    // ── step 2: load sizes when entering size step ───────────
 
-    // ==========================================
-    // HANDLE SIZE ADJUSTMENT SAVE
-    // ==========================================
+    useEffect(() => {
+        if (step !== STEPS.SIZE || !designState.brandId || !designState.garmentTypeEnum) return;
 
-    const handleSizeAdjustmentSave = (
-        adjustments
-    ) => {
+        setSizesLoading(true);
+        setSizesError(null);
 
-        const finalRequirements = {
-            ...designRequirements,
+        apiClient
+            .get(`/brands/${designState.brandId}/${designState.garmentTypeEnum}/sizes`)
+            .then((res) => {
+                const all = res.data?.data || [];
+                setSizes(all);
+                if (all.length === 0) {
+                    setSizesError(`No sizes available for ${designState.brandName}.`);
+                }
+            })
+            .catch((err) => {
+                console.error('Sizes fetch error:', err);
+                setSizesError(
+                    err?.response?.data?.message ||
+                    'Unable to load sizes. Please try again.'
+                );
+            })
+            .finally(() => setSizesLoading(false));
+    }, [step, designState.brandId, designState.garmentTypeEnum]);
 
-            sizeAdjusted: true,
+    // ── step 2 → 3: size selected, load measurements ─────────
 
-            sizeSatisfied: false,
-
-            adjustments: {
-                ...adjustments,
-            },
-        };
-
-
-        setDesignRequirements(
-            finalRequirements
-        );
-
+    const selectSize = async (size) => {
+        update({
+            sizeId:           size.id,
+            sizeLabel:        size.sizeLabel,
+            brandMeasurements: [],
+            alterations:      [],
+            adjustments:      {},
+            fitConfirmed:     false,
+        });
+        setMeasError(null);
         setShowSizeAdjuster(false);
+        setMeasLoading(true);
+        goTo(STEPS.MEASUREMENT);
 
-        setConversationStatus('ready');
+        try {
+            const res  = await apiClient.get(`/sizes/${size.id}/measurements`);
+            const meas = res.data?.data?.measurements || [];
 
-        setChangeMode(false);
-
-        setPendingChange(null);
-
-        setShowConfirmation(true);
-
-
-        setMessages(
-            (previousMessages) => [
-                ...previousMessages,
-
-                {
-                    id: Date.now(),
-                    sender: 'ai',
-                    text:
-                        'Perfect! I have saved your adjusted fit. Your size preferences are now part of the design.',
-                },
-
-                {
-                    id: Date.now() + 1,
-                    sender: 'ai',
-                    text:
-                        'I now have everything I need to prepare your cosplay design. 🎨',
-                },
-
-                {
-                    id: Date.now() + 2,
-                    sender: 'ai',
-                    type: 'summary',
-                    requirements:
-                        finalRequirements,
-                },
-
-                {
-                    id: Date.now() + 3,
-                    sender: 'ai',
-                    text:
-                        'Please review the requirements above. Once everything looks good, we can move on to generating your design.',
-                },
-            ]
-        );
+            if (meas.length === 0) {
+                setMeasError(
+                    `Measurement data is currently unavailable for ` +
+                    `${designState.brandName} ${size.sizeLabel}.`
+                );
+            } else {
+                update({ brandMeasurements: meas });
+                setShowSizeAdjuster(true);
+            }
+        } catch (err) {
+            console.error('Measurements fetch error:', err);
+            setMeasError(
+                err?.response?.data?.message ||
+                'Unable to load measurement data. Please try again.'
+            );
+        } finally {
+            setMeasLoading(false);
+        }
     };
 
+    // ── step 3: size adjuster save ───────────────────────────
 
-    // ==========================================
-    // HANDLE MAKE CHANGES
-    // ==========================================
-
-    const handleMakeChanges = () => {
-
-        setShowConfirmation(false);
-
-        setChangeMode(true);
-
-        setPendingChange(null);
-
-        setConversationStatus('collecting');
-
-
-        setMessages(
-            (previousMessages) => [
-                ...previousMessages,
-
-                {
-                    id: Date.now(),
-                    sender: 'ai',
-                    text:
-                        'Of course! What would you like to change? You can change the color, fit, design, style, placement, size adjustments, or any other part of the concept.',
-                },
-            ]
-        );
+    const handleSizeAdjustmentSave = (adjustments, alterations = []) => {
+        update({
+            adjustments,
+            alterations,
+            fitConfirmed: true,
+        });
+        setShowSizeAdjuster(false);
     };
 
+    const confirmFitAsIs = () => {
+        update({ fitConfirmed: true, adjustments: {}, alterations: [] });
+    };
 
-    // ==========================================
-    // HANDLE GENERATE DESIGN
-    // ==========================================
+    // ── step 3 → 4 ──────────────────────────────────────────
 
-    const handleGenerateDesign = () => {
+    const goToDesign = () => goTo(STEPS.DESIGN);
 
-        setShowConfirmation(false);
+    // ── reference image ──────────────────────────────────────
 
-        setChangeMode(false);
+    const handleReferenceImage = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
 
-        setPendingChange(null);
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            update({
+                referenceImage: {
+                    file,
+                    dataUrl: ev.target.result,
+                    name:    file.name,
+                },
+            });
+        };
+        reader.readAsDataURL(file);
 
+        // Reset input so the same file can be re-selected after removal
+        e.target.value = '';
+    };
+
+    const removeReferenceImage = () => update({ referenceImage: null });
+
+    // ── step 4 → 5: go to review ─────────────────────────────
+
+    const goToReview = () => goTo(STEPS.REVIEW);
+
+    // ── generate design ──────────────────────────────────────
+
+    const handleGenerateDesign = useCallback(async () => {
+        const {
+            garmentTypeEnum, garmentLabel, brandName, sizeLabel,
+            color, fit, style, design, placement,
+            creativePrompt, referenceImage,
+            adjustments, alterations, brandMeasurements,
+        } = designState;
+
+        // Build the structured payload for the future image-generation API
+        const payload = {
+            garmentType:    garmentTypeEnum,
+            garmentLabel,
+            brand:          brandName,
+            size:           sizeLabel,
+            measurements:   brandMeasurements,
+            alterations,
+            adjustments,
+            color,
+            fit,
+            style,
+            design,
+            placement,
+            creativePrompt: creativePrompt?.trim() || '',
+            referenceImage: referenceImage
+                ? { name: referenceImage.name, dataUrl: referenceImage.dataUrl }
+                : null,
+        };
+
+        setGenerationPayload(payload);
         setIsGenerating(true);
-
         setGenerationStep(0);
-
         setGenerationComplete(false);
 
-
-        setMessages(
-            (previousMessages) => [
-                ...previousMessages,
-
-                {
-                    id: Date.now(),
-                    sender: 'ai',
-                    text:
-                        'Perfect! Your design requirements are confirmed. I’m preparing your design now. 🎨',
-                },
-            ]
-        );
-    };
-
-
-    // ==========================================
-    // HANDLE CHANGE REQUEST
-    // ==========================================
-
-    const handleChangeRequest = (
-        userMessage
-    ) => {
-
-        const message =
-            userMessage
-                .toLowerCase()
-                .trim();
-
-
-        // ==========================================
-        // AVAILABLE COLORS
-        // ==========================================
-
-        const colors = [
-            'black',
-            'white',
-            'red',
-            'blue',
-            'green',
-            'yellow',
-            'orange',
-            'purple',
-            'pink',
-            'grey',
-            'gray',
-            'brown',
-            'beige',
-            'navy',
-            'maroon',
-            'cream',
-        ];
-
-
-        // ==========================================
-        // AVAILABLE FITS
-        // ==========================================
-
-        const fits = {
-
-            oversized:
-                'Oversized / Loose',
-
-            oversize:
-                'Oversized / Loose',
-
-            baggy:
-                'Oversized / Loose',
-
-            loose:
-                'Oversized / Loose',
-
-            'slim fit':
-                'Slim',
-
-            slim:
-                'Slim',
-
-            'regular fit':
-                'Regular',
-
-            regular:
-                'Regular',
-
-            relaxed:
-                'Relaxed',
-        };
-
-
-        // ==========================================
-        // AVAILABLE STYLES
-        // ==========================================
-
-        const styles = [
-            'anime',
-            'cyberpunk',
-            'futuristic',
-            'realistic',
-            'photorealistic',
-            'tribal',
-            'minimal',
-            'minimalist',
-            'cartoon',
-            'graffiti',
-            'street art',
-        ];
-
-
-        // ==========================================
-        // AVAILABLE DESIGNS
-        // ==========================================
-
-        const designs = [
-            'dragon',
-            'skull',
-            'flame',
-            'fire',
-            'flower',
-            'floral',
-            'logo',
-            'samurai',
-            'wolf',
-            'tiger',
-            'phoenix',
-        ];
-
-
-        // ==========================================
-        // FINISH ONE CHANGE
-        // ==========================================
-
-        const finishChange = (
-            updatedRequirements,
-            response
-        ) => {
-
-            setDesignRequirements(
-                updatedRequirements
-            );
-
-            setPendingChange(null);
-
-            setChangeMode(true);
-
-            setShowConfirmation(false);
-
-
-            setMessages(
-                (previousMessages) => [
-                    ...previousMessages,
-
-                    {
-                        id: Date.now(),
-                        sender: 'ai',
-                        text: response,
-                    },
-
-                    {
-                        id: Date.now() + 1,
-                        sender: 'ai',
-                        text:
-                            'Would you like to change anything else? Type color, fit, design, style, placement, or size adjustments. If everything is good, type “done”.',
-                    },
-                ]
-            );
-        };
-
-
-        // ==========================================
-        // FINISH CHANGE MODE
-        // ==========================================
-
-        if (
-            message === 'done' ||
-            message === 'finish' ||
-            message === 'finished' ||
-            message === 'no' ||
-            message === 'nope' ||
-            message === 'nothing' ||
-            message === 'nothing else' ||
-            message === 'looks good'
-        ) {
-
-            setChangeMode(false);
-
-            setPendingChange(null);
-
-            setConversationStatus('ready');
-
-            setShowConfirmation(true);
-
-
-            setMessages(
-                (previousMessages) => [
-                    ...previousMessages,
-
-                    {
-                        id: Date.now(),
-                        sender: 'ai',
-                        text:
-                            'Perfect! I’ve updated the design requirements. Please review the updated summary below.',
-                    },
-
-                    {
-                        id: Date.now() + 1,
-                        sender: 'ai',
-                        type: 'summary',
-                        requirements:
-                            designRequirements,
-                    },
-
-                    {
-                        id: Date.now() + 2,
-                        sender: 'ai',
-                        text:
-                            'Once everything looks good, you can generate your design.',
-                    },
-                ]
-            );
-
-            return;
-        }
-
-
-        // ==========================================
-        // WAITING FOR COLOR
-        // ==========================================
-
-        if (pendingChange === 'color') {
-
-            const found =
-                colors.find(
-                    (color) =>
-                        message.includes(color)
-                );
-
-
-            if (found) {
-
-                const formatted =
-                    found === 'grey' ||
-                        found === 'gray'
-                        ? 'Grey'
-                        : found
-                            .charAt(0)
-                            .toUpperCase() +
-                        found.slice(1);
-
-
-                finishChange(
-
-                    {
-                        ...designRequirements,
-
-                        color: formatted,
-                    },
-
-                    `Got it! I’ll change the color to ${formatted}. 🎨`
-                );
-
-                return;
+        // Persist to backend (existing logic preserved)
+        try {
+            if (garmentTypeEnum && designState.sizeId) {
+                const promptStr = [color, fit, style, garmentLabel, design && `with ${design} artwork`]
+                    .filter(Boolean)
+                    .join(' ');
+
+                await apiClient.post('/custom-designs', {
+                    userId:          user?.id || 'demo-user-id',
+                    garmentType:     garmentTypeEnum,
+                    designPrompt:    creativePrompt?.trim() || promptStr || 'Custom Design',
+                    referenceImages: [],
+                    baseBrandSizeId: designState.sizeId,
+                    alterations: (alterations || []).map((a) => ({
+                        measurementTypeId: a.measurementTypeId,
+                        adjustment:        Number(a.adjustment) || 0,
+                    })),
+                });
+                console.log('CustomDesign saved successfully.');
             }
-
-
-            setMessages(
-                (previousMessages) => [
-                    ...previousMessages,
-
-                    {
-                        id: Date.now(),
-                        sender: 'ai',
-                        text:
-                            'What color would you like instead? For example: black, white, red, blue, navy, or cream.',
-                    },
-                ]
-            );
-
-            return;
+        } catch (err) {
+            console.error('Error saving CustomDesign:', err);
         }
+    }, [designState, user]);
 
-
-        // ==========================================
-        // WAITING FOR FIT
-        // ==========================================
-
-        if (pendingChange === 'fit') {
-
-            const found =
-                Object.keys(fits).find(
-                    (fit) =>
-                        message.includes(fit)
-                );
-
-
-            if (found) {
-
-                finishChange(
-
-                    {
-                        ...designRequirements,
-
-                        fit: fits[found],
-                    },
-
-                    `Got it! I’ve changed the fit to ${fits[found]}.`
-                );
-
-                return;
-            }
-
-
-            setMessages(
-                (previousMessages) => [
-                    ...previousMessages,
-
-                    {
-                        id: Date.now(),
-                        sender: 'ai',
-                        text:
-                            'What fit would you like? For example: oversized, slim, regular, or relaxed.',
-                    },
-                ]
-            );
-
-            return;
-        }
-
-
-        // ==========================================
-        // WAITING FOR DESIGN
-        // ==========================================
-
-        if (pendingChange === 'design') {
-
-            const found =
-                designs.find(
-                    (design) =>
-                        message.includes(design)
-                );
-
-
-            if (found) {
-
-                let formatted =
-                    found
-                        .charAt(0)
-                        .toUpperCase() +
-                    found.slice(1);
-
-
-                if (
-                    found === 'fire' ||
-                    found === 'flame'
-                ) {
-                    formatted = 'Flame';
-                }
-
-
-                if (found === 'floral') {
-                    formatted = 'Flower';
-                }
-
-
-                finishChange(
-
-                    {
-                        ...designRequirements,
-
-                        design: formatted,
-                    },
-
-                    `Perfect! I’ve changed the design to ${formatted}.`
-                );
-
-                return;
-            }
-
-
-            setMessages(
-                (previousMessages) => [
-                    ...previousMessages,
-
-                    {
-                        id: Date.now(),
-                        sender: 'ai',
-                        text:
-                            'What design would you like instead? For example: dragon, skull, flame, wolf, tiger, or phoenix.',
-                    },
-                ]
-            );
-
-            return;
-        }
-
-
-        // ==========================================
-        // WAITING FOR STYLE
-        // ==========================================
-
-        if (pendingChange === 'style') {
-
-            const found =
-                styles.find(
-                    (style) =>
-                        message.includes(style)
-                );
-
-
-            if (found) {
-
-                let formatted =
-                    found
-                        .charAt(0)
-                        .toUpperCase() +
-                    found.slice(1);
-
-
-                if (found === 'anime') {
-                    formatted =
-                        'Anime-inspired';
-                }
-
-
-                if (found === 'street art') {
-                    formatted =
-                        'Graffiti / Street Art';
-                }
-
-
-                finishChange(
-
-                    {
-                        ...designRequirements,
-
-                        style: formatted,
-                    },
-
-                    `Great! I’ve changed the style to ${formatted}.`
-                );
-
-                return;
-            }
-
-
-            setMessages(
-                (previousMessages) => [
-                    ...previousMessages,
-
-                    {
-                        id: Date.now(),
-                        sender: 'ai',
-                        text:
-                            'What style would you like? For example: anime, cyberpunk, futuristic, realistic, or graffiti.',
-                    },
-                ]
-            );
-
-            return;
-        }
-
-
-        // ==========================================
-        // WAITING FOR PLACEMENT
-        // ==========================================
-
-        if (pendingChange === 'placement') {
-
-            if (
-                message.includes('front') &&
-                message.includes('back')
-            ) {
-
-                finishChange(
-
-                    {
-                        ...designRequirements,
-
-                        placement:
-                            'Front and Back',
-                    },
-
-                    'Got it! I’ve changed the placement to Front and Back.'
-                );
-
-                return;
-            }
-
-
-            if (message.includes('back')) {
-
-                finishChange(
-
-                    {
-                        ...designRequirements,
-
-                        placement: 'Back',
-                    },
-
-                    'Got it! I’ve changed the placement to Back.'
-                );
-
-                return;
-            }
-
-
-            if (message.includes('sleeve')) {
-
-                finishChange(
-
-                    {
-                        ...designRequirements,
-
-                        placement: 'Sleeve',
-                    },
-
-                    'Got it! I’ve changed the placement to Sleeve.'
-                );
-
-                return;
-            }
-
-
-            if (message.includes('chest')) {
-
-                finishChange(
-
-                    {
-                        ...designRequirements,
-
-                        placement:
-                            'Front / Chest',
-                    },
-
-                    'Got it! I’ve changed the placement to Front / Chest.'
-                );
-
-                return;
-            }
-
-
-            if (message.includes('front')) {
-
-                finishChange(
-
-                    {
-                        ...designRequirements,
-
-                        placement: 'Front',
-                    },
-
-                    'Got it! I’ve changed the placement to Front.'
-                );
-
-                return;
-            }
-
-
-            setMessages(
-                (previousMessages) => [
-                    ...previousMessages,
-
-                    {
-                        id: Date.now(),
-                        sender: 'ai',
-                        text:
-                            'Where should the design be placed? For example: front, back, chest, sleeve, or front and back.',
-                    },
-                ]
-            );
-
-            return;
-        }
-
-
-        // ==========================================
-        // USER SAYS SIZE / MEASUREMENTS
-        // ==========================================
-
-        // Allow the user to reopen the size adjustment panel
-        // even after they have already adjusted the size once.
-        if (
-            message.includes('size adjustment') ||
-            message.includes('size adjustments') ||
-            message.includes('measurements') ||
-            message.includes('measurement') ||
-            message.includes('sizing') ||
-            message.includes('fit measurements')
-        ) {
-
-            setChangeMode(false);
-
-            setPendingChange(null);
-
-            setShowConfirmation(false);
-
-            setShowSizeAdjuster(true);
-
-            setConversationStatus('collecting');
-
-            setMessages(
-                (previousMessages) => [
-                    ...previousMessages,
-
-                    {
-                        id: Date.now(),
-                        sender: 'ai',
-                        text:
-                            "Sure! Let's adjust your measurements again. You can modify the fit using the sliders below.",
-                    },
-                ]
-            );
-
-            return;
-        }
-
-
-        // ==========================================
-        // USER SAYS COLOR
-        // ==========================================
-
-        if (
-            message.includes('color') ||
-            message.includes('colour')
-        ) {
-
-            setPendingChange('color');
-
-
-            setMessages(
-                (previousMessages) => [
-                    ...previousMessages,
-
-                    {
-                        id: Date.now(),
-                        sender: 'ai',
-                        text:
-                            'Sure! What color would you like instead? 🎨',
-                    },
-                ]
-            );
-
-            return;
-        }
-
-
-        // ==========================================
-        // USER SAYS FIT
-        // ==========================================
-
-        if (message.includes('fit')) {
-
-            setPendingChange('fit');
-
-
-            setMessages(
-                (previousMessages) => [
-                    ...previousMessages,
-
-                    {
-                        id: Date.now(),
-                        sender: 'ai',
-                        text:
-                            'Sure! What fit would you like instead? For example: oversized, slim, regular, or relaxed.',
-                    },
-                ]
-            );
-
-            return;
-        }
-
-
-        // ==========================================
-        // USER SAYS DESIGN
-        // ==========================================
-
-        if (
-            message.includes('design') ||
-            message.includes('pattern')
-        ) {
-
-            setPendingChange('design');
-
-
-            setMessages(
-                (previousMessages) => [
-                    ...previousMessages,
-
-                    {
-                        id: Date.now(),
-                        sender: 'ai',
-                        text:
-                            'Sure! What design would you like instead?',
-                    },
-                ]
-            );
-
-            return;
-        }
-
-
-        // ==========================================
-        // USER SAYS STYLE
-        // ==========================================
-
-        if (message.includes('style')) {
-
-            setPendingChange('style');
-
-
-            setMessages(
-                (previousMessages) => [
-                    ...previousMessages,
-
-                    {
-                        id: Date.now(),
-                        sender: 'ai',
-                        text:
-                            'Sure! What style would you like instead?',
-                    },
-                ]
-            );
-
-            return;
-        }
-
-
-        // ==========================================
-        // USER SAYS PLACEMENT
-        // ==========================================
-
-        if (
-            message.includes('placement') ||
-            message.includes('position')
-        ) {
-
-            setPendingChange('placement');
-
-
-            setMessages(
-                (previousMessages) => [
-                    ...previousMessages,
-
-                    {
-                        id: Date.now(),
-                        sender: 'ai',
-                        text:
-                            'Sure! Where would you like the design placed?',
-                    },
-                ]
-            );
-
-            return;
-        }
-
-
-        // ==========================================
-        // UNKNOWN CHANGE
-        // ==========================================
-
-        setMessages(
-            (previousMessages) => [
-                ...previousMessages,
-
-                {
-                    id: Date.now(),
-                    sender: 'ai',
-                    text:
-                        'Sure! Tell me what part of the design you would like to change — color, fit, design, style, placement, or size adjustments.',
-                },
-            ]
-        );
-    };
-
-
-    // ==========================================
-    // MOCK DESIGN GENERATION
-    // ==========================================
+    // ── generation animation (existing logic preserved) ──────
 
     useEffect(() => {
-
-        if (!isGenerating) {
-            return;
-        }
-
+        if (!isGenerating) return;
 
         const steps = [
             'Analyzing your concept...',
@@ -1858,1758 +351,599 @@ function AIDesignPage() {
             'Generating your design...',
         ];
 
-
-        let currentStep = 0;
-
-
+        let current = 0;
         setGenerationStep(0);
-
         setGenerationComplete(false);
 
+        const interval = setInterval(() => {
+            current += 1;
+            if (current < steps.length) {
+                setGenerationStep(current);
+            } else {
+                clearInterval(interval);
+                setGenerationComplete(true);
+                setIsGenerating(false);
+            }
+        }, 1200);
 
-        const interval =
-            setInterval(() => {
-
-                currentStep += 1;
-
-
-                if (
-                    currentStep <
-                    steps.length
-                ) {
-
-                    setGenerationStep(
-                        currentStep
-                    );
-
-                }
-
-                else {
-
-                    clearInterval(interval);
-
-
-                    setGenerationComplete(
-                        true
-                    );
-
-                    setIsGenerating(false);
-
-
-                    setMessages(
-                        (previousMessages) => [
-                            ...previousMessages,
-
-                            {
-                                id: Date.now(),
-                                sender: 'ai',
-                                text:
-                                    'Your cosplay design is ready! ✨',
-                            },
-
-                            {
-                                id: Date.now() + 1,
-                                sender: 'ai',
-                                type:
-                                    'generated-design',
-                                requirements:
-                                    designRequirements,
-                            },
-                        ]
-                    );
-                }
-
-            }, 1200);
-
-
-        return () =>
-            clearInterval(interval);
-
+        return () => clearInterval(interval);
     }, [isGenerating]);
 
-
-    // ==========================================
-    // RENDER GENERATED DESIGN
-    // ==========================================
-
-    const renderGeneratedDesign = (
-        requirements
-    ) => {
-
-        const colorMap = {
-
-            black: '#111111',
-
-            white: '#f5f5f5',
-
-            red: '#c62828',
-
-            blue: '#2563eb',
-
-            green: '#16803c',
-
-            yellow: '#eab308',
-
-            orange: '#ea580c',
-
-            purple: '#7c3aed',
-
-            pink: '#ec4899',
-
-            grey: '#6b7280',
-
-            brown: '#78350f',
-
-            beige: '#d6c3a5',
-
-            navy: '#172554',
-
-            maroon: '#7f1d1d',
-
-            cream: '#f5f0df',
-        };
-
-
-        const shirtColor =
-            colorMap[
-            String(
-                requirements?.color || ''
-            ).toLowerCase()
-            ] || '#111111';
-
-
-        const designText =
-            requirements?.design ||
-            'Custom Design';
-
-
-        return (
-
-            <div className="generated-design-card">
-
-
-                {/* HEADER */}
-
-                <div className="generated-design-header">
-
-                    <div>
-
-                        <span className="generated-design-label">
-                            AI GENERATED CONCEPT
-                        </span>
-
-
-                        <h3>
-                            Your Cosplay Design
-                        </h3>
-
-
-                        <p>
-                            Your concept has been
-                            generated based on the
-                            requirements you provided.
-                        </p>
-
-                    </div>
-
-
-                    <div className="generated-design-status">
-                        ✓ Ready
-                    </div>
-
-                </div>
-
-
-                {/* PREVIEW */}
-
-                <div className="generated-design-preview">
-
-
-                    <div className="generated-shirt">
-
-                        <svg
-                            viewBox="0 0 400 500"
-                            className="generated-shirt-svg"
-                        >
-
-                            {/* SHADOW */}
-
-                            <ellipse
-                                cx="200"
-                                cy="465"
-                                rx="105"
-                                ry="18"
-                                fill="#dddddd"
-                            />
-
-
-                            {/* LEFT SLEEVE */}
-
-                            <path
-                                d="
-                                    M105 100
-                                    L35 145
-                                    L75 220
-                                    L125 190
-                                    Z
-                                "
-                                fill={shirtColor}
-                            />
-
-
-                            {/* RIGHT SLEEVE */}
-
-                            <path
-                                d="
-                                    M295 100
-                                    L365 145
-                                    L325 220
-                                    L275 190
-                                    Z
-                                "
-                                fill={shirtColor}
-                            />
-
-
-                            {/* MAIN SHIRT */}
-
-                            <path
-                                d="
-                                    M105 90
-                                    Q200 55 295 90
-                                    L275 435
-                                    Q200 460 125 435
-                                    Z
-                                "
-                                fill={shirtColor}
-                            />
-
-
-                            {/* NECK */}
-
-                            <path
-                                d="
-                                    M155 75
-                                    Q200 115 245 75
-                                    Q230 130 200 132
-                                    Q170 130 155 75
-                                "
-                                fill="#ffffff"
-                                opacity="0.15"
-                            />
-
-
-                            {/* DESIGN CIRCLE */}
-
-                            <circle
-                                cx="200"
-                                cy="270"
-                                r="75"
-                                fill="none"
-                                stroke="#ffffff"
-                                strokeWidth="3"
-                                opacity="0.35"
-                            />
-
-
-                            {/* DESIGN NAME */}
-
-                            <text
-                                x="200"
-                                y="260"
-                                textAnchor="middle"
-                                fill="#ffffff"
-                                fontSize="18"
-                                fontWeight="700"
-                                fontFamily="Arial, sans-serif"
-                            >
-                                {designText.substring(
-                                    0,
-                                    18
-                                )}
-                            </text>
-
-
-                            <text
-                                x="200"
-                                y="288"
-                                textAnchor="middle"
-                                fill="#ffffff"
-                                fontSize="11"
-                                fontFamily="Arial, sans-serif"
-                                opacity="0.8"
-                            >
-                                COSPLAY STUDIO
-                            </text>
-
-                        </svg>
-
-                    </div>
-
-
-                    {/* DESIGN INFORMATION */}
-
-                    <div className="generated-design-info">
-
-
-                        <div className="generated-info-row">
-
-                            <span>
-                                Garment
-                            </span>
-
-                            <strong>
-                                {
-                                    requirements?.garment ||
-                                    'T-shirt'
-                                }
-                            </strong>
-
-                        </div>
-
-
-                        <div className="generated-info-row">
-
-                            <span>
-                                Color
-                            </span>
-
-                            <strong>
-                                {
-                                    requirements?.color ||
-                                    'Custom'
-                                }
-                            </strong>
-
-                        </div>
-
-
-                        <div className="generated-info-row">
-
-                            <span>
-                                Fit
-                            </span>
-
-                            <strong>
-                                {
-                                    requirements?.fit ||
-                                    'Custom'
-                                }
-                            </strong>
-
-                        </div>
-
-
-                        <div className="generated-info-row">
-
-                            <span>
-                                Style
-                            </span>
-
-                            <strong>
-                                {
-                                    requirements?.style ||
-                                    'Custom'
-                                }
-                            </strong>
-
-                        </div>
-
-
-                        <div className="generated-info-row">
-
-                            <span>
-                                Placement
-                            </span>
-
-                            <strong>
-                                {
-                                    requirements?.placement ||
-                                    'Front'
-                                }
-                            </strong>
-
-                        </div>
-
-
-                        <div className="generated-info-row">
-
-                            <span>
-                                Design
-                            </span>
-
-                            <strong>
-                                {
-                                    requirements?.design ||
-                                    'Custom'
-                                }
-                            </strong>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-
-                {/* ACTION BUTTONS */}
-
-                <div className="generated-design-actions">
-
-
-                    <button
-                        className="generated-secondary-button"
-                        onClick={
-                            handleMakeChanges
-                        }
-                    >
-                        ✎ Make Changes
-                    </button>
-
-
-                    <button
-                        className="generated-secondary-button"
-                        onClick={() => {
-
-                            setGenerationComplete(
-                                false
-                            );
-
-                            setIsGenerating(
-                                true
-                            );
-
-                            setGenerationStep(
-                                0
-                            );
-
-                        }}
-                    >
-                        ↻ Regenerate
-                    </button>
-
-
-                    <button
-                        className="generated-primary-button"
-                        onClick={
-                            startNewChat
-                        }
-                    >
-                        ＋ Start New Design
-                    </button>
-
-                </div>
-
-            </div>
-        );
-    };
-
-
-    // ==========================================
-    // SEND MESSAGE
-    // ==========================================
-
-    const sendMessage = () => {
-
-        const trimmedInput =
-            input.trim();
-
-
-        if (
-            !trimmedInput ||
-            isTyping ||
-            isGenerating
-        ) {
-            return;
-        }
-
-
-        // ==========================================
-        // CHANGE MODE
-        // ==========================================
-
-        if (changeMode) {
-
-            setMessages(
-                (previousMessages) => [
-                    ...previousMessages,
-
-                    {
-                        id: Date.now(),
-                        sender: 'user',
-                        text: trimmedInput,
-                    },
-                ]
-            );
-
-
-            setInput('');
-
-
-            handleChangeRequest(
-                trimmedInput
-            );
-
-            return;
-        }
-
-
-        // ==========================================
-        // NORMAL CONVERSATION
-        // ==========================================
-
-        const userMessage = {
-
-            id: Date.now(),
-
-            sender: 'user',
-
-            text: trimmedInput,
-        };
-
-
-        setMessages(
-            (previousMessages) => [
-                ...previousMessages,
-                userMessage,
-            ]
-        );
-
-
-        setInput('');
-
-        setIsTyping(true);
-
-        setConversationStatus(
-            'collecting'
-        );
-
-
-        // ==========================================
-        // PROCESS MESSAGE
-        // ==========================================
-
-        setTimeout(() => {
-
-            setDesignRequirements(
-                (currentRequirements) => {
-
-                    const result =
-                        processUserMessage(
-                            trimmedInput,
-                            currentRequirements
-                        );
-
-
-                    // ==================================
-                    // SIZE ADJUSTMENT
-                    // ==================================
-
-                    if (
-                        result.updatedRequirements
-                            .sizeSatisfied ===
-                        false &&
-
-                        !result.updatedRequirements
-                            .sizeAdjusted
-                    ) {
-
-                        setMessages(
-                            (previousMessages) => [
-                                ...previousMessages,
-
-                                {
-                                    id:
-                                        Date.now() +
-                                        1,
-
-                                    sender: 'ai',
-
-                                    text:
-                                        "No problem. Let's adjust the fit visually so you don't need to know your exact measurements.",
-                                },
-                            ]
-                        );
-
-
-                        setShowSizeAdjuster(
-                            true
-                        );
-
-                        setShowConfirmation(
-                            false
-                        );
-
-                        setIsTyping(false);
-
-
-                        return result.updatedRequirements;
-                    }
-
-
-                    // ==================================
-                    // COMPLETE
-                    // ==================================
-
-                    if (
-                        !result.nextQuestion
-                    ) {
-
-                        setConversationStatus(
-                            'ready'
-                        );
-
-                        setShowConfirmation(
-                            true
-                        );
-
-
-                        setMessages(
-                            (previousMessages) => [
-                                ...previousMessages,
-
-                                {
-                                    id:
-                                        Date.now() +
-                                        1,
-
-                                    sender: 'ai',
-
-                                    text:
-                                        'Perfect! I have everything I need to create your design. 🎨',
-                                },
-
-                                {
-                                    id:
-                                        Date.now() +
-                                        2,
-
-                                    sender: 'ai',
-
-                                    type: 'summary',
-
-                                    requirements:
-                                        result.updatedRequirements,
-                                },
-
-                                {
-                                    id:
-                                        Date.now() +
-                                        3,
-
-                                    sender: 'ai',
-
-                                    text:
-                                        'Please review the requirements above. Once everything looks good, we can move on to generating your design.',
-                                },
-                            ]
-                        );
-
-
-                        setIsTyping(false);
-
-
-                        return result.updatedRequirements;
-                    }
-
-
-                    // ==================================
-                    // NEXT QUESTION
-                    // ==================================
-
-                    setMessages(
-                        (previousMessages) => [
-                            ...previousMessages,
-
-                            {
-                                id:
-                                    Date.now() +
-                                    1,
-
-                                sender: 'ai',
-
-                                text:
-                                    result.nextQuestion
-                                        .question,
-                            },
-                        ]
-                    );
-
-
-                    setIsTyping(false);
-
-
-                    return result.updatedRequirements;
-                }
-            );
-
-        }, 900);
-    };
-
-
-    // ==========================================
-    // ENTER KEY
-    // ==========================================
-
-    const handleKeyDown = (
-        event
-    ) => {
-
-        if (
-            event.key === 'Enter' &&
-            !event.shiftKey
-        ) {
-
-            event.preventDefault();
-
-            sendMessage();
-        }
-    };
-
-
-    // ==========================================
-    // NEW CHAT
-    // ==========================================
-
-    const startNewChat = () => {
-
-        setMessages([]);
-
-        setInput('');
-
-        setIsTyping(false);
-
-        setConversationStatus(
-            'welcome'
-        );
-
+    // ── reset ────────────────────────────────────────────────
+
+    const reset = () => {
+        setStep(STEPS.GARMENT);
+        setDesignState(initialDesignState);
+        setBrands([]);
+        setSizes([]);
+        setBrandsError(null);
+        setSizesError(null);
+        setMeasError(null);
         setShowSizeAdjuster(false);
-
-        setShowConfirmation(false);
-
         setIsGenerating(false);
-
-        setChangeMode(false);
-
-        setPendingChange(null);
-
         setGenerationStep(0);
-
         setGenerationComplete(false);
-
-
-        setDesignRequirements({
-
-            garment: null,
-
-            color: null,
-
-            fit: null,
-
-            design: null,
-
-            style: null,
-
-            placement: null,
-
-
-            sizeType: null,
-
-            referenceBrand: null,
-
-            referenceSize: null,
-
-            sizeSatisfied: null,
-
-            sizeAdjusted: false,
-
-
-            adjustments: {
-
-                chest: 0,
-
-                waist: 0,
-
-                shoulder: 0,
-
-                length: 0,
-
-                sleeve: 0,
-            },
-
-
-            measurements: {
-
-                chest: null,
-
-                waist: null,
-
-                shoulder: null,
-
-                length: null,
-            },
-        });
+        setGenerationPayload(null);
+        scrollTop();
     };
 
-
-    // ==========================================
-    // RENDER SUMMARY
-    // ==========================================
-
-    const renderSummary = (
-        requirements
-    ) => {
-
-        return (
-
-            <div className="design-summary">
-
-
-                <div className="summary-title">
-                    Design Requirements
-                </div>
-
-
-                {/* GARMENT */}
-
-                <div className="summary-item">
-
-                    <span>
-                        Garment
-                    </span>
-
-                    <strong>
-                        {
-                            requirements.garment ||
-                            'Not specified'
-                        }
-                    </strong>
-
-                </div>
-
-
-                {/* COLOR */}
-
-                <div className="summary-item">
-
-                    <span>
-                        Color
-                    </span>
-
-                    <strong>
-                        {
-                            requirements.color ||
-                            'Not specified'
-                        }
-                    </strong>
-
-                </div>
-
-
-                {/* FIT */}
-
-                <div className="summary-item">
-
-                    <span>
-                        Fit
-                    </span>
-
-                    <strong>
-                        {
-                            requirements.fit ||
-                            'Not specified'
-                        }
-                    </strong>
-
-                </div>
-
-
-                {/* DESIGN */}
-
-                <div className="summary-item">
-
-                    <span>
-                        Design
-                    </span>
-
-                    <strong>
-                        {
-                            requirements.design ||
-                            'Not specified'
-                        }
-                    </strong>
-
-                </div>
-
-
-                {/* STYLE */}
-
-                <div className="summary-item">
-
-                    <span>
-                        Style
-                    </span>
-
-                    <strong>
-                        {
-                            requirements.style ||
-                            'Not specified'
-                        }
-                    </strong>
-
-                </div>
-
-
-                {/* PLACEMENT */}
-
-                <div className="summary-item">
-
-                    <span>
-                        Placement
-                    </span>
-
-                    <strong>
-                        {
-                            requirements.placement ||
-                            'Not specified'
-                        }
-                    </strong>
-
-                </div>
-
-
-                {/* REFERENCE SIZE */}
-
-                <div className="summary-item">
-
-                    <span>
-                        Reference Size
-                    </span>
-
-                    <strong>
-
-                        {
-                            requirements.referenceBrand &&
-                                requirements.referenceSize
-
-                                ? `${requirements.referenceBrand} ${requirements.referenceSize}`
-
-                                : 'Not specified'
-                        }
-
-                    </strong>
-
-                </div>
-
-
-                {/* SIZE PREFERENCE */}
-
-                <div className="summary-item">
-
-                    <span>
-                        Size Preference
-                    </span>
-
-                    <strong>
-
-                        {
-                            requirements.sizeAdjusted
-
-                                ? 'Custom adjusted'
-
-                                : requirements.sizeSatisfied ===
-                                    true
-
-                                    ? 'Reference size'
-
-                                    : requirements.sizeType ===
-                                        'custom'
-
-                                        ? 'Custom size'
-
-                                        : 'Not specified'
-                        }
-
-                    </strong>
-
-                </div>
-
-
-                {/* SIZE ADJUSTMENTS */}
-
-                {
-                    requirements.sizeAdjusted && (
-
-                        <div className="custom-measurements">
-
-
-                            <div className="summary-subtitle">
-                                Size Adjustments
-                            </div>
-
-
-                            <div className="summary-item">
-
-                                <span>
-                                    Chest
-                                </span>
-
-                                <strong>
-
-                                    {
-                                        requirements.adjustments.chest >
-                                            0
-
-                                            ? '+'
-
-                                            : ''
-                                    }
-
-                                    {
-                                        requirements.adjustments.chest
-                                    }
-
-                                </strong>
-
-                            </div>
-
-
-                            <div className="summary-item">
-
-                                <span>
-                                    Waist
-                                </span>
-
-                                <strong>
-
-                                    {
-                                        requirements.adjustments.waist >
-                                            0
-
-                                            ? '+'
-
-                                            : ''
-                                    }
-
-                                    {
-                                        requirements.adjustments.waist
-                                    }
-
-                                </strong>
-
-                            </div>
-
-
-                            <div className="summary-item">
-
-                                <span>
-                                    Shoulder
-                                </span>
-
-                                <strong>
-
-                                    {
-                                        requirements.adjustments.shoulder >
-                                            0
-
-                                            ? '+'
-
-                                            : ''
-                                    }
-
-                                    {
-                                        requirements.adjustments.shoulder
-                                    }
-
-                                </strong>
-
-                            </div>
-
-
-                            <div className="summary-item">
-
-                                <span>
-                                    Length
-                                </span>
-
-                                <strong>
-
-                                    {
-                                        requirements.adjustments.length >
-                                            0
-
-                                            ? '+'
-
-                                            : ''
-                                    }
-
-                                    {
-                                        requirements.adjustments.length
-                                    }
-
-                                </strong>
-
-                            </div>
-
-
-                            <div className="summary-item">
-
-                                <span>
-                                    Sleeve
-                                </span>
-
-                                <strong>
-
-                                    {
-                                        requirements.adjustments.sleeve >
-                                            0
-
-                                            ? '+'
-
-                                            : ''
-                                    }
-
-                                    {
-                                        requirements.adjustments.sleeve
-                                    }
-
-                                </strong>
-
-                            </div>
-
-                        </div>
-                    )
-                }
-
-
-                {/* CUSTOM MEASUREMENTS */}
-
-                {
-                    requirements.sizeType ===
-                    'custom' &&
-
-                    !requirements.sizeAdjusted && (
-
-                        <div className="custom-measurements">
-
-
-                            <div className="summary-subtitle">
-                                Custom Measurements
-                            </div>
-
-
-                            <div className="summary-item">
-
-                                <span>
-                                    Chest
-                                </span>
-
-                                <strong>
-                                    {
-                                        requirements.measurements.chest ||
-                                        '-'
-                                    } in
-                                </strong>
-
-                            </div>
-
-
-                            <div className="summary-item">
-
-                                <span>
-                                    Waist
-                                </span>
-
-                                <strong>
-                                    {
-                                        requirements.measurements.waist ||
-                                        '-'
-                                    } in
-                                </strong>
-
-                            </div>
-
-
-                            <div className="summary-item">
-
-                                <span>
-                                    Shoulder
-                                </span>
-
-                                <strong>
-                                    {
-                                        requirements.measurements.shoulder ||
-                                        '-'
-                                    } in
-                                </strong>
-
-                            </div>
-
-
-                            <div className="summary-item">
-
-                                <span>
-                                    Length
-                                </span>
-
-                                <strong>
-                                    {
-                                        requirements.measurements.length ||
-                                        '-'
-                                    } in
-                                </strong>
-
-                            </div>
-
-                        </div>
-                    )
-                }
-
-
-                {/* ==================================
-                    CONFIRMATION BUTTONS
-                ================================== */}
-
-                {
-                    showConfirmation && (
-
-                        <div className="summary-actions">
-
-
-                            <button
-                                className="summary-change-button"
-                                onClick={
-                                    handleMakeChanges
-                                }
-                            >
-                                ✎ Make Changes
-                            </button>
-
-
-                            <button
-                                className="summary-generate-button"
-                                onClick={
-                                    handleGenerateDesign
-                                }
-                            >
-                                ✓ Looks Good — Generate Design
-                            </button>
-
-                        </div>
-                    )
-                }
-
-            </div>
-        );
+    // ── color hex map (preserved) ─────────────────────────────
+
+    const colorHex = {
+        black:'#111111', white:'#f5f5f5', red:'#c62828', blue:'#2563eb',
+        green:'#16803c', yellow:'#eab308', orange:'#ea580c', purple:'#7c3aed',
+        pink:'#ec4899', grey:'#6b7280', brown:'#78350f', beige:'#d6c3a5',
+        navy:'#172554', maroon:'#7f1d1d', cream:'#f5f0df',
     };
 
+    // ── design validity check ─────────────────────────────────
 
-    // ==========================================
-    // PAGE
-    // ==========================================
+    const designComplete =
+        Boolean(designState.creativePrompt?.trim());
 
-    return (
+    // ============================================================
+    // RENDER HELPERS
+    // ============================================================
 
-        <div className="ai-design-page">
-
-
-            {/* =====================================
-                HEADER
-            ====================================== */}
-
-            <header className="ai-design-header">
-
-
-                <div className="ai-brand">
-
-
-                    <div className="ai-brand-icon">
-                        ✨
-                    </div>
-
-
-                    <div>
-
-
-                        <div className="ai-brand-name">
-                            Cosplay Design Studio
-                        </div>
-
-
-                        <div className="ai-brand-status">
-                            AI Design Agent
-                        </div>
-
-
-                    </div>
-
-                </div>
-
-
-                <button
-                    className="new-chat-button"
-                    onClick={
-                        startNewChat
+    const renderStepBar = () => (
+        <div className="workflow-stepbar">
+            {STEP_LABELS.map((label, i) => (
+                <div
+                    key={label}
+                    className={
+                        'workflow-step' +
+                        (i === step   ? ' workflow-step--active'    : '') +
+                        (i < step     ? ' workflow-step--completed' : '') +
+                        (i > step     ? ' workflow-step--upcoming'  : '')
                     }
                 >
-
-                    <span>
-                        ＋
-                    </span>
-
-                    New Chat
-
-                </button>
-
-            </header>
-
-
-            {/* =====================================
-                CHAT AREA
-            ====================================== */}
-
-            <main className="ai-chat-area">
-
-
-                {/* ==================================
-                    WELCOME
-                ================================== */}
-
-                {
-                    messages.length === 0 && (
-
-                        <div className="ai-welcome">
-
-
-                            <div className="welcome-icon">
-                                ✨
-                            </div>
-
-
-                            <h1>
-                                Cosplay Design Studio
-                            </h1>
-
-
-                            <p className="welcome-main-text">
-                                Bring your cosplay ideas to life.
-                            </p>
-
-
-                            <p className="welcome-secondary-text">
-
-                                Describe what you want
-                                to create and I'll help
-                                you develop the design
-                                through conversation.
-
-                            </p>
-
-                        </div>
-                    )
-                }
-
-
-                {/* ==================================
-                    MESSAGES
-                ================================== */}
-
-                {
-                    messages.length > 0 && (
-
-                        <div className="messages-container">
-
-
-                            {
-                                messages.map(
-                                    (message) => (
-
-                                        <div
-                                            key={
-                                                message.id
-                                            }
-
-                                            className={
-                                                `message-row ${message.sender ===
-                                                    'user'
-
-                                                    ? 'user-row'
-
-                                                    : 'ai-row'
-                                                }`
-                                            }
-                                        >
-
-
-                                            {/* AI AVATAR */}
-
-                                            {
-                                                message.sender ===
-                                                'ai' && (
-
-                                                    <div className="message-avatar ai-avatar">
-                                                        ✨
-                                                    </div>
-                                                )
-                                            }
-
-
-                                            {/* SUMMARY */}
-
-                                            {
-                                                message.type ===
-                                                    'summary'
-
-                                                    ? (
-
-                                                        <div className="message-content ai-message">
-
-                                                            {
-                                                                renderSummary(
-                                                                    message.requirements
-                                                                )
-                                                            }
-
-                                                        </div>
-
-                                                    )
-
-                                                    : message.type ===
-                                                        'generated-design'
-
-                                                        ? (
-
-                                                            <div className="message-content ai-message generated-design-message">
-
-                                                                {
-                                                                    renderGeneratedDesign(
-                                                                        message.requirements
-                                                                    )
-                                                                }
-
-                                                            </div>
-
-                                                        )
-
-                                                        : (
-
-                                                            <div
-                                                                className={
-                                                                    `message-content ${message.sender ===
-                                                                        'user'
-
-                                                                        ? 'user-message'
-
-                                                                        : 'ai-message'
-                                                                    }`
-                                                                }
-                                                            >
-
-                                                                {
-                                                                    message.text
-                                                                }
-
-                                                            </div>
-                                                        )
-                                            }
-
-                                        </div>
-                                    )
-                                )
-                            }
-
-
-                            {/* =================================
-                                SIZE ADJUSTER
-                            ================================== */}
-
-                            {
-                                showSizeAdjuster && (
-
-                                    <div className="message-row ai-row">
-
-
-                                        <div className="message-avatar ai-avatar">
-                                            ✨
-                                        </div>
-
-
-                                        <div className="message-content ai-message size-adjuster-message">
-
-
-                                            <SizeAdjuster
-                                                initialAdjustments={
-                                                    designRequirements.adjustments
-                                                }
-                                                onSave={
-                                                    handleSizeAdjustmentSave
-                                                }
-                                            />
-
-
-                                        </div>
-
-                                    </div>
-                                )
-                            }
-
-
-                            {/* =================================
-                                DESIGN GENERATION
-                            ================================== */}
-
-                            {
-                                isGenerating && (
-
-                                    <div className="generation-message-row">
-
-
-                                        <div className="message-avatar ai-avatar">
-                                            ✨
-                                        </div>
-
-
-                                        <div className="generation-card">
-
-
-                                            <div className="generation-card-title">
-                                                Creating your design
-                                            </div>
-
-
-                                            <div className="generation-card-subtitle">
-
-                                                {
-                                                    [
-                                                        'Analyzing your concept...',
-                                                        'Applying garment...',
-                                                        'Applying color and design...',
-                                                        'Applying your selected style...',
-                                                        'Applying size adjustments...',
-                                                        'Generating your design...',
-                                                    ][
-                                                    generationStep
-                                                    ]
-                                                }
-
-                                            </div>
-
-
-                                            <div className="generation-progress">
-
-
-                                                <div
-                                                    className="generation-progress-bar"
-
-                                                    style={{
-                                                        width:
-                                                            `${Math.min(
-                                                                (
-                                                                    (
-                                                                        generationStep +
-                                                                        1
-                                                                    ) /
-                                                                    6
-                                                                ) *
-                                                                100,
-
-                                                                100
-                                                            )}%`,
-                                                    }}
-                                                />
-
-                                            </div>
-
-
-                                            <div className="generation-steps">
-
-
-                                                {
-                                                    [
-                                                        'Concept',
-                                                        'Garment',
-                                                        'Style',
-                                                        'Color',
-                                                        'Size',
-                                                        'Final Design',
-                                                    ].map(
-                                                        (
-                                                            step,
-                                                            index
-                                                        ) => (
-
-                                                            <div
-                                                                key={
-                                                                    step
-                                                                }
-
-                                                                className={
-                                                                    index <=
-                                                                        generationStep
-
-                                                                        ? 'generation-step active'
-
-                                                                        : 'generation-step'
-                                                                }
-                                                            >
-
-
-                                                                <span>
-
-                                                                    {
-                                                                        index <=
-                                                                            generationStep
-
-                                                                            ? '✓'
-
-                                                                            : index +
-                                                                            1
-                                                                    }
-
-                                                                </span>
-
-
-                                                                <small>
-                                                                    {
-                                                                        step
-                                                                    }
-                                                                </small>
-
-
-                                                            </div>
-                                                        )
-                                                    )
-                                                }
-
-                                            </div>
-
-                                        </div>
-
-                                    </div>
-                                )
-                            }
-
-
-                            {/* =================================
-                                TYPING INDICATOR
-                            ================================== */}
-
-                            {
-                                isTyping && (
-
-                                    <div className="message-row ai-row">
-
-
-                                        <div className="message-avatar ai-avatar">
-                                            ✨
-                                        </div>
-
-
-                                        <div className="typing-indicator">
-
-
-                                            <span></span>
-
-                                            <span></span>
-
-                                            <span></span>
-
-
-                                        </div>
-
-                                    </div>
-                                )
-                            }
-
-
-                            <div
-                                ref={
-                                    messagesEndRef
-                                }
-                            />
-
-                        </div>
-                    )
-                }
-
-            </main>
-
-
-            {/* =====================================
-                INPUT
-            ====================================== */}
-
-            <footer className="ai-input-section">
-
-
-                <div className="ai-input-wrapper">
-
-
-                    <div className="ai-input-box">
-
-
-                        <textarea
-                            value={input}
-
-                            onChange={(event) =>
-                                setInput(
-                                    event.target.value
-                                )
-                            }
-
-                            onKeyDown={
-                                handleKeyDown
-                            }
-
-                            placeholder={
-                                changeMode
-                                    ? 'Tell me what you would like to change...'
-                                    : 'Describe the clothing or cosplay you want to create...'
-                            }
-
-                            rows="1"
-
-                            disabled={
-                                isTyping ||
-                                isGenerating
-                            }
-                        />
-
-
+                    <div className="workflow-step-circle">
+                        {i < step ? '✓' : i + 1}
+                    </div>
+                    <span>{label}</span>
+                </div>
+            ))}
+        </div>
+    );
+
+    // ── Step 0: Garment ──────────────────────────────────────
+
+    const renderGarmentStep = () => (
+        <div className="workflow-panel">
+            <h2 className="workflow-panel-title">Select Garment Type</h2>
+            <p className="workflow-panel-desc">Choose the type of clothing you want to design.</p>
+            <div className="wf-grid wf-grid--2">
+                {GARMENT_TYPES.map((g) => (
+                    <button
+                        key={g.enum}
+                        className={
+                            'wf-card-btn' +
+                            (designState.garmentTypeEnum === g.enum ? ' wf-card-btn--selected' : '')
+                        }
+                        onClick={() => selectGarment(g)}
+                    >
+                        <span className="wf-card-btn-label">{g.label}</span>
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+
+    // ── Step 1: Brand ────────────────────────────────────────
+
+    const renderBrandStep = () => (
+        <div className="workflow-panel">
+            <h2 className="workflow-panel-title">Select Brand</h2>
+            <p className="workflow-panel-desc">
+                Available brands for <strong>{designState.garmentLabel}</strong>:
+            </p>
+
+            {brandsLoading && <div className="wf-loading">Loading brands…</div>}
+
+            {brandsError && (
+                <div className="wf-error">⚠️ {brandsError}</div>
+            )}
+
+            {!brandsLoading && !brandsError && brands.length > 0 && (
+                <div className="wf-grid wf-grid--3">
+                    {brands.map((b) => (
                         <button
-                            className="send-button"
-
-                            onClick={
-                                sendMessage
+                            key={b.id}
+                            className={
+                                'wf-card-btn' +
+                                (designState.brandId === b.id ? ' wf-card-btn--selected' : '')
                             }
-
-                            disabled={
-                                !input.trim() ||
-                                isTyping ||
-                                isGenerating
-                            }
-
-                            aria-label="Send message"
+                            onClick={() => selectBrand(b)}
                         >
-                            ↑
+                            <span className="wf-card-btn-label">{b.name}</span>
                         </button>
+                    ))}
+                </div>
+            )}
 
+            <button className="wf-back-btn" onClick={() => goTo(STEPS.GARMENT)}>
+                ← Back
+            </button>
+        </div>
+    );
 
+    // ── Step 2: Size ─────────────────────────────────────────
+
+    const renderSizeStep = () => (
+        <div className="workflow-panel">
+            <h2 className="workflow-panel-title">Select Size</h2>
+            <p className="workflow-panel-desc">
+                Available sizes for <strong>{designState.brandName}</strong> {designState.garmentLabel}:
+            </p>
+
+            {sizesLoading && <div className="wf-loading">Loading sizes…</div>}
+
+            {sizesError && (
+                <div className="wf-error">⚠️ {sizesError}</div>
+            )}
+
+            {!sizesLoading && !sizesError && sizes.length > 0 && (
+                <div className="wf-grid wf-grid--4">
+                    {sizes.map((s) => (
+                        <button
+                            key={s.id}
+                            className={
+                                'wf-card-btn wf-size-btn' +
+                                (designState.sizeId === s.id ? ' wf-card-btn--selected' : '')
+                            }
+                            onClick={() => selectSize(s)}
+                        >
+                            {s.sizeLabel}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            <button className="wf-back-btn" onClick={() => goTo(STEPS.BRAND)}>
+                ← Back
+            </button>
+        </div>
+    );
+
+    // ── Step 3: Measurement ──────────────────────────────────
+
+    const renderMeasurementStep = () => (
+        <div className="workflow-panel">
+            <h2 className="workflow-panel-title">Fit Adjustment</h2>
+            <p className="workflow-panel-desc">
+                Base fit: <strong>{designState.brandName} — {designState.sizeLabel}</strong>.
+                Adjust sliders to fine-tune, or keep the standard measurements.
+            </p>
+
+            {measLoading && <div className="wf-loading">Loading measurements…</div>}
+
+            {measError && (
+                <div className="wf-error">⚠️ {measError}</div>
+            )}
+
+            {!measLoading && !measError && showSizeAdjuster && (
+                <SizeAdjuster
+                    garmentType={designState.garmentLabel}
+                    brandName={designState.brandName}
+                    sizeLabel={designState.sizeLabel}
+                    measurements={designState.brandMeasurements}
+                    initialAdjustments={designState.adjustments}
+                    onSave={handleSizeAdjustmentSave}
+                />
+            )}
+
+            {!measLoading && !measError && designState.brandMeasurements.length > 0 && (
+                <div className="wf-fit-actions">
+                    {!showSizeAdjuster && !designState.fitConfirmed && (
+                        <button
+                            className="wf-secondary-btn"
+                            onClick={() => setShowSizeAdjuster(true)}
+                        >
+                            ✎ Adjust Measurements
+                        </button>
+                    )}
+
+                    {designState.fitConfirmed ? (
+                        <div className="wf-confirmed-badge">
+                            ✓ Fit confirmed
+                            {Object.keys(designState.adjustments).length > 0 && ' (with adjustments)'}
+                        </div>
+                    ) : (
+                        !showSizeAdjuster && (
+                            <button className="wf-primary-btn" onClick={confirmFitAsIs}>
+                                Use Standard Fit
+                            </button>
+                        )
+                    )}
+
+                    {designState.fitConfirmed && (
+                        <button className="wf-primary-btn" onClick={goToDesign}>
+                            Continue to Design →
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {!measLoading && measError && (
+                // Allow skipping measurement when data unavailable
+                <div className="wf-fit-actions">
+                    <button className="wf-primary-btn" onClick={() => {
+                        update({ fitConfirmed: true });
+                        goToDesign();
+                    }}>
+                        Skip & Continue →
+                    </button>
+                </div>
+            )}
+
+            <button className="wf-back-btn" onClick={() => goTo(STEPS.SIZE)}>
+                ← Back
+            </button>
+        </div>
+    );
+
+    // ── Step 4: Design ───────────────────────────────────────
+
+    const renderDesignStep = () => (
+        <div className="workflow-panel">
+            <h2 className="workflow-panel-title">Design Your Garment</h2>
+            <p className="workflow-panel-desc">
+                Describe your design in your own words, and optionally upload a reference image.
+            </p>
+
+            {/* B — Creative prompt */}
+
+            <div className="wf-section-label">Creative Prompt</div>
+            <textarea
+                className="wf-prompt-textarea"
+                rows={8}
+                style={{ fontSize: 15 }}
+                placeholder="Describe your design — e.g. Create a black futuristic cyberpunk shirt with silver geometric armor-inspired panels, glowing blue accents, and an anime-inspired aesthetic."
+                value={designState.creativePrompt}
+                onChange={(e) => update({ creativePrompt: e.target.value })}
+            />
+
+            {/* C — Reference image */}
+
+            <div className="wf-section-label">Reference Image <span className="wf-optional">(optional)</span></div>
+
+            {designState.referenceImage ? (
+                <div className="wf-ref-image-preview">
+                    <img
+                        src={designState.referenceImage.dataUrl}
+                        alt="Reference"
+                        className="wf-ref-image"
+                    />
+                    <div className="wf-ref-image-meta">
+                        <span>{designState.referenceImage.name}</span>
+                        <button
+                            className="wf-remove-img-btn"
+                            onClick={removeReferenceImage}
+                        >
+                            ✕ Remove
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div className="wf-upload-area" onClick={() => referenceInputRef.current?.click()}>
+                    <span className="wf-upload-icon">📎</span>
+                    <span>Click to upload a reference image</span>
+                    <input
+                        ref={referenceInputRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={handleReferenceImage}
+                    />
+                </div>
+            )}
+
+            {/* Actions */}
+
+            {!designComplete && (
+                <p className="wf-incomplete-note">
+                    Describe your design to continue.
+                </p>
+            )}
+
+            <div className="wf-fit-actions">
+                <button
+                    className="wf-primary-btn"
+                    disabled={!designComplete}
+                    onClick={goToReview}
+                >
+                    Review Design →
+                </button>
+            </div>
+
+            <button className="wf-back-btn" onClick={() => goTo(STEPS.MEASUREMENT)}>
+                ← Back
+            </button>
+        </div>
+    );
+
+    // ── Step 5: Review ───────────────────────────────────────
+
+    const renderReviewStep = () => {
+        const d = designState;
+
+        return (
+            <div className="workflow-panel">
+                <h2 className="workflow-panel-title">Review Your Design</h2>
+                <p className="workflow-panel-desc">
+                    Confirm your selections before generating the design.
+                </p>
+
+                <div className="wf-review-grid">
+
+                    {/* Garment / Brand / Size */}
+                    <div className="wf-review-section">
+                        <div className="wf-review-section-title">
+                            Garment
+                            <button className="wf-edit-link" onClick={() => goTo(STEPS.GARMENT)}>Edit</button>
+                        </div>
+                        <div className="summary-item"><span>Type</span><strong>{d.garmentLabel}</strong></div>
+                        <div className="summary-item"><span>Brand</span><strong>{d.brandName}</strong></div>
+                        <div className="summary-item"><span>Size</span><strong>{d.sizeLabel}</strong></div>
                     </div>
 
+                    {/* Fit */}
+                    <div className="wf-review-section">
+                        <div className="wf-review-section-title">
+                            Fit
+                            <button className="wf-edit-link" onClick={() => goTo(STEPS.MEASUREMENT)}>Edit</button>
+                        </div>
+                        <div className="summary-item">
+                            <span>Measurements</span>
+                            <strong>
+                                {d.fitConfirmed
+                                    ? Object.keys(d.adjustments).length > 0
+                                        ? 'Custom adjusted'
+                                        : 'Standard fit'
+                                    : 'Not confirmed'}
+                            </strong>
+                        </div>
 
-                    <p className="input-disclaimer">
+                        {Object.keys(d.adjustments).length > 0 && (
+                            <div className="wf-adjustments-list">
+                                {Object.entries(d.adjustments).map(([key, val]) => (
+                                    <div key={key} className="summary-item">
+                                        <span style={{ textTransform: 'capitalize' }}>{key}</span>
+                                        <strong>{val > 0 ? `+${val}` : val} cm</strong>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
 
-                        Cosplay Design Studio can help
-                        develop clothing concepts,
-                        styles, colors, fits, and designs.
+                    {/* Creative prompt */}
+                    <div className="wf-review-section">
+                        <div className="wf-review-section-title">
+                            Creative Prompt
+                            <button className="wf-edit-link" onClick={() => goTo(STEPS.DESIGN)}>Edit</button>
+                        </div>
+                        <p className="wf-review-prompt">
+                            {d.creativePrompt?.trim() || <em>No creative prompt provided.</em>}
+                        </p>
+                    </div>
 
-                    </p>
-
+                    {/* Reference image */}
+                    <div className="wf-review-section">
+                        <div className="wf-review-section-title">
+                            Reference Image
+                            <button className="wf-edit-link" onClick={() => goTo(STEPS.DESIGN)}>Edit</button>
+                        </div>
+                        {d.referenceImage ? (
+                            <div className="wf-ref-review">
+                                <img
+                                    src={d.referenceImage.dataUrl}
+                                    alt="Reference"
+                                    className="wf-ref-review-img"
+                                />
+                                <span>{d.referenceImage.name}</span>
+                            </div>
+                        ) : (
+                            <p className="wf-review-none">None uploaded</p>
+                        )}
+                    </div>
                 </div>
 
-            </footer>
+                {/* Generate button */}
+                <div className="wf-fit-actions" style={{ marginTop: 24 }}>
+                    <button
+                        className="wf-primary-btn wf-generate-btn"
+                        disabled={isGenerating}
+                        onClick={handleGenerateDesign}
+                    >
+                        {isGenerating ? 'Generating…' : '✨ Generate Design'}
+                    </button>
+                </div>
 
+                <button className="wf-back-btn" onClick={() => goTo(STEPS.DESIGN)}>
+                    ← Back
+                </button>
+            </div>
+        );
+    };
+
+    // ── Generation card (existing UI, preserved) ─────────────
+
+    const renderGenerationCard = () => (
+        <div className="workflow-panel">
+            <div className="generation-card" style={{ width: '100%' }}>
+                <div className="generation-card-title">Creating your design</div>
+                <div className="generation-card-subtitle">
+                    {[
+                        'Analyzing your concept…',
+                        'Applying garment…',
+                        'Applying color and design…',
+                        'Applying your selected style…',
+                        'Applying size adjustments…',
+                        'Generating your design…',
+                    ][generationStep]}
+                </div>
+                <div className="generation-progress">
+                    <div
+                        className="generation-progress-bar"
+                        style={{ width: `${Math.min(((generationStep + 1) / 6) * 100, 100)}%` }}
+                    />
+                </div>
+                <div className="generation-steps">
+                    {['Concept', 'Garment', 'Color', 'Style', 'Size', 'Final'].map((s, i) => (
+                        <div key={s} className={`generation-step${i <= generationStep ? ' active' : ''}`}>
+                            <span>{i <= generationStep ? '✓' : i + 1}</span>
+                            <small>{s}</small>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+
+    // ── Generation complete placeholder ───────────────────────
+
+    const renderGenerationComplete = () => {
+        const d = designState;
+        // Colour now comes from the creative prompt, not a picker, so use a neutral placeholder tone
+        const shirtColor = colorHex[String(d.color || '').toLowerCase()] || colorHex.grey;
+
+        return (
+            <div className="workflow-panel">
+                <div className="generated-design-card" style={{ width: '100%' }}>
+                    <div className="generated-design-header">
+                        <div>
+                            <span className="generated-design-label">AI GENERATED CONCEPT</span>
+                            <h3>Your Design</h3>
+                            <p>Design ready — image generation API will be integrated here.</p>
+                        </div>
+                        <div className="generated-design-status">✓ Ready</div>
+                    </div>
+
+                    <div className="generated-design-preview">
+                        {/* SVG garment preview (existing) */}
+                        <div className="generated-shirt">
+                            <svg viewBox="0 0 400 500" className="generated-shirt-svg">
+                                <ellipse cx="200" cy="465" rx="105" ry="18" fill="#dddddd" />
+                                <path d="M105 100 L35 145 L75 220 L125 190 Z" fill={shirtColor} />
+                                <path d="M295 100 L365 145 L325 220 L275 190 Z" fill={shirtColor} />
+                                <path d="M105 90 Q200 55 295 90 L275 435 Q200 460 125 435 Z" fill={shirtColor} />
+                                <path d="M155 75 Q200 115 245 75 Q230 130 200 132 Q170 130 155 75" fill="#ffffff" opacity="0.15" />
+                                <circle cx="200" cy="230" r="72" fill="#ffffff" opacity="0.1" />
+                                <text x="200" y="220" textAnchor="middle" fill="#ffffff" fontSize="18" fontWeight="bold" opacity="0.85">
+                                    {d.garmentLabel || 'Design'}
+                                </text>
+                                <text x="200" y="245" textAnchor="middle" fill="#ffffff" fontSize="11" opacity="0.6">
+                                    {d.brandName ? `${d.brandName} ${d.sizeLabel || ''}`.trim() : ''}
+                                </text>
+                            </svg>
+                        </div>
+
+                        {/* Info panel */}
+                        <div className="generated-design-info">
+                            {[
+                                ['Garment', `${d.garmentLabel} — ${d.brandName} ${d.sizeLabel}`],
+                                ['Fit', d.fitConfirmed
+                                    ? (Object.keys(d.adjustments || {}).length > 0 ? 'Custom adjusted' : 'Standard fit')
+                                    : null],
+                                ['Reference', d.referenceImage?.name],
+                            ].map(([label, val]) => (
+                                <div key={label} className="generated-info-row">
+                                    <span>{label}</span>
+                                    <strong>{val || '—'}</strong>
+                                </div>
+                            ))}
+                            {d.creativePrompt?.trim() && (
+                                <div className="generated-info-row">
+                                    <span>Prompt</span>
+                                    <strong style={{ maxWidth: 260, textAlign: 'right', wordBreak: 'break-word' }}>
+                                        {d.creativePrompt}
+                                    </strong>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="generated-design-actions">
+                        <button className="generated-secondary-button" onClick={reset}>
+                            ← Start Over
+                        </button>
+                        <button
+                            className="generated-primary-button"
+                            disabled
+                            title="Image generation API coming soon"
+                        >
+                            Download Design (Soon)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // ============================================================
+    // MAIN RENDER
+    // ============================================================
+
+    return (
+        <div className="ai-design-page">
+
+            {/* ── HEADER ────────────────────────────────────────── */}
+
+            <header className="ai-design-header">
+                <div className="ai-brand">
+                    <div className="ai-brand-icon">✨</div>
+                    <div>
+                        <div className="ai-brand-name">AI Design Studio</div>
+                        <div className="ai-brand-status">Design your garment</div>
+                    </div>
+                </div>
+
+                <button className="new-chat-button" onClick={reset}>
+                    <span>＋</span> New Design
+                </button>
+            </header>
+
+            {/* ── MAIN CONTENT ──────────────────────────────────── */}
+
+            <main className="ai-chat-area">
+                <div className="messages-container" ref={topRef}>
+
+                    {/* Step progress bar */}
+                    {renderStepBar()}
+
+                    {/* Step panels */}
+                    {!isGenerating && !generationComplete && step === STEPS.GARMENT     && renderGarmentStep()}
+                    {!isGenerating && !generationComplete && step === STEPS.BRAND       && renderBrandStep()}
+                    {!isGenerating && !generationComplete && step === STEPS.SIZE        && renderSizeStep()}
+                    {!isGenerating && !generationComplete && step === STEPS.MEASUREMENT && renderMeasurementStep()}
+                    {!isGenerating && !generationComplete && step === STEPS.DESIGN      && renderDesignStep()}
+                    {!isGenerating && !generationComplete && step === STEPS.REVIEW      && renderReviewStep()}
+
+                    {isGenerating          && renderGenerationCard()}
+                    {generationComplete    && renderGenerationComplete()}
+
+                </div>
+            </main>
         </div>
     );
 }
