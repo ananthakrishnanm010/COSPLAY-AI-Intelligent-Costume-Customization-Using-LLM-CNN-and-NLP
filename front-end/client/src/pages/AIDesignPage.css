@@ -966,3 +966,586 @@
         flex-direction: column;
     }
 }
+
+/* =========================================
+   WORKFLOW — STEP BAR
+========================================= */
+
+.workflow-stepbar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 32px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.workflow-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 60px;
+    position: relative;
+    color: #bbbbbb;
+    font-size: 11px;
+    font-weight: 500;
+    text-align: center;
+}
+
+/* connecting line */
+.workflow-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 14px;
+    left: calc(50% + 14px);
+    right: calc(-50% + 14px);
+    height: 2px;
+    background: #e5e5e5;
+    z-index: 0;
+}
+
+.workflow-step--completed:not(:last-child)::after {
+    background: #111111;
+}
+
+.workflow-step-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #e5e5e5;
+    color: #888888;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+}
+
+.workflow-step--active .workflow-step-circle {
+    background: #111111;
+    color: #ffffff;
+}
+
+.workflow-step--completed .workflow-step-circle {
+    background: #111111;
+    color: #ffffff;
+}
+
+.workflow-step--active {
+    color: #111111;
+}
+
+.workflow-step--completed {
+    color: #555555;
+}
+
+
+/* =========================================
+   WORKFLOW — PANEL
+========================================= */
+
+.workflow-panel {
+    width: 100%;
+    padding-bottom: 20px;
+}
+
+.workflow-panel-title {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0 0 6px;
+    letter-spacing: -0.4px;
+}
+
+.workflow-panel-desc {
+    font-size: 14px;
+    color: #666666;
+    margin: 0 0 24px;
+    line-height: 1.5;
+}
+
+.wf-section-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #333333;
+    margin: 22px 0 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.wf-optional {
+    font-weight: 400;
+    color: #999999;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.wf-selected-label {
+    font-size: 12px;
+    color: #555555;
+    margin-top: 6px;
+    margin-bottom: 2px;
+}
+
+.wf-incomplete-note {
+    font-size: 13px;
+    color: #e05c00;
+    margin: 14px 0 0;
+}
+
+
+/* =========================================
+   WORKFLOW — GRIDS
+========================================= */
+
+.wf-grid {
+    display: grid;
+    gap: 10px;
+}
+
+.wf-grid--2 { grid-template-columns: repeat(2, 1fr); }
+.wf-grid--3 { grid-template-columns: repeat(3, 1fr); }
+.wf-grid--4 { grid-template-columns: repeat(4, 1fr); }
+.wf-grid--5 { grid-template-columns: repeat(5, 1fr); }
+
+
+/* =========================================
+   WORKFLOW — CARD BUTTON (garment / brand)
+========================================= */
+
+.wf-card-btn {
+    padding: 18px 12px;
+    border: 2px solid #e5e5e5;
+    border-radius: 12px;
+    background: #ffffff;
+    cursor: pointer;
+    transition: border-color 0.18s, background 0.18s, transform 0.12s;
+    text-align: center;
+    font-family: inherit;
+}
+
+.wf-card-btn:hover {
+    border-color: #999999;
+    background: #fafafa;
+}
+
+.wf-card-btn--selected {
+    border-color: #111111;
+    background: #f7f7f7;
+}
+
+.wf-card-btn-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #222222;
+    display: block;
+}
+
+
+/* =========================================
+   WORKFLOW — SIZE BUTTON
+========================================= */
+
+.wf-size-btn {
+    padding: 14px 8px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #222222;
+}
+
+
+/* =========================================
+   WORKFLOW — CHIP (design options)
+========================================= */
+
+.wf-chip {
+    padding: 9px 14px;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 8px;
+    background: #ffffff;
+    font-size: 13px;
+    color: #333333;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    font-family: inherit;
+    text-align: center;
+}
+
+.wf-chip:hover {
+    border-color: #aaaaaa;
+    background: #f7f7f7;
+}
+
+.wf-chip--selected {
+    border-color: #111111;
+    background: #111111;
+    color: #ffffff;
+}
+
+
+/* =========================================
+   WORKFLOW — COLOR SWATCHES
+========================================= */
+
+.wf-color-swatch {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 8px;
+    border: 2.5px solid transparent;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.15s, transform 0.12s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.wf-color-swatch:hover {
+    transform: scale(1.08);
+}
+
+.wf-color-swatch--selected {
+    border-color: #111111;
+    box-shadow: 0 0 0 2px #ffffff inset;
+}
+
+.wf-color-check {
+    font-size: 14px;
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+
+
+/* =========================================
+   WORKFLOW — CREATIVE PROMPT
+========================================= */
+
+.wf-prompt-textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid #d8d8d8;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.55;
+    color: #111111;
+    background: #ffffff;
+    resize: vertical;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.wf-prompt-textarea:focus {
+    outline: none;
+    border-color: #888888;
+}
+
+.wf-prompt-textarea::placeholder {
+    color: #aaaaaa;
+}
+
+
+/* =========================================
+   WORKFLOW — REFERENCE IMAGE UPLOAD
+========================================= */
+
+.wf-upload-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 22px;
+    border: 1.5px dashed #c8c8c8;
+    border-radius: 10px;
+    cursor: pointer;
+    color: #888888;
+    font-size: 13px;
+    transition: border-color 0.18s, background 0.18s;
+    background: #fafafa;
+}
+
+.wf-upload-area:hover {
+    border-color: #888888;
+    background: #f3f3f3;
+}
+
+.wf-upload-icon {
+    font-size: 22px;
+}
+
+.wf-ref-image-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.wf-ref-image {
+    max-width: 260px;
+    max-height: 200px;
+    border-radius: 10px;
+    border: 1px solid #e5e5e5;
+    object-fit: contain;
+}
+
+.wf-ref-image-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: #555555;
+}
+
+.wf-remove-img-btn {
+    background: none;
+    border: none;
+    color: #cc3300;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    padding: 0;
+}
+
+.wf-remove-img-btn:hover {
+    text-decoration: underline;
+}
+
+
+/* =========================================
+   WORKFLOW — ACTION BUTTONS
+========================================= */
+
+.wf-fit-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.wf-primary-btn {
+    width: 100%;
+    padding: 13px 18px;
+    border: none;
+    border-radius: 10px;
+    background: #111111;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.12s;
+}
+
+.wf-primary-btn:hover:not(:disabled) {
+    background: #2a2a2a;
+    transform: translateY(-1px);
+}
+
+.wf-primary-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.wf-secondary-btn {
+    width: 100%;
+    padding: 12px 18px;
+    border: 1.5px solid #d0d0d0;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #222222;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.18s;
+}
+
+.wf-secondary-btn:hover {
+    background: #f5f5f5;
+}
+
+.wf-back-btn {
+    margin-top: 16px;
+    background: none;
+    border: none;
+    color: #888888;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    padding: 4px 0;
+    display: inline-block;
+}
+
+.wf-back-btn:hover {
+    color: #333333;
+}
+
+.wf-generate-btn {
+    font-size: 16px;
+    padding: 15px 22px;
+}
+
+.wf-confirmed-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #2a7a2a;
+    font-weight: 600;
+    padding: 8px 12px;
+    background: #edf7ed;
+    border-radius: 8px;
+}
+
+
+/* =========================================
+   WORKFLOW — LOADING / ERROR
+========================================= */
+
+.wf-loading {
+    padding: 16px 0;
+    font-size: 14px;
+    color: #888888;
+}
+
+.wf-error {
+    padding: 12px 16px;
+    background: #fff4f0;
+    border: 1px solid #f5c6b5;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #cc3300;
+    margin-bottom: 12px;
+}
+
+
+/* =========================================
+   WORKFLOW — REVIEW PANEL
+========================================= */
+
+.wf-review-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.wf-review-section {
+    padding: 16px;
+    border: 1px solid #e8e8e8;
+    border-radius: 12px;
+    background: #fafafa;
+}
+
+.wf-review-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #111111;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.wf-edit-link {
+    background: none;
+    border: none;
+    color: #555555;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    text-decoration: underline;
+    padding: 0;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.wf-edit-link:hover {
+    color: #111111;
+}
+
+.wf-adjustments-list {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid #eeeeee;
+}
+
+.wf-review-prompt {
+    font-size: 13px;
+    color: #444444;
+    line-height: 1.6;
+    margin: 0;
+    font-style: normal;
+}
+
+.wf-review-prompt em {
+    color: #aaaaaa;
+    font-style: italic;
+}
+
+.wf-review-none {
+    font-size: 13px;
+    color: #aaaaaa;
+    margin: 0;
+}
+
+.wf-ref-review {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 12px;
+    color: #666666;
+}
+
+.wf-ref-review-img {
+    max-width: 180px;
+    max-height: 140px;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    object-fit: contain;
+}
+
+
+/* =========================================
+   WORKFLOW — MOBILE
+========================================= */
+
+@media (max-width: 600px) {
+
+    .workflow-stepbar {
+        gap: 0;
+        margin-bottom: 22px;
+    }
+
+    .workflow-step {
+        font-size: 9px;
+        min-width: 42px;
+    }
+
+    .wf-grid--3 { grid-template-columns: repeat(2, 1fr); }
+    .wf-grid--4 { grid-template-columns: repeat(3, 1fr); }
+    .wf-grid--5 { grid-template-columns: repeat(5, 1fr); }
+
+    .wf-card-btn {
+        padding: 14px 10px;
+    }
+
+    .wf-color-swatch {
+        border-radius: 6px;
+    }
+
+    .wf-primary-btn,
+    .wf-secondary-btn {
+        font-size: 13px;
+        padding: 12px 14px;
+    }
+
+    .workflow-panel-title {
+        font-size: 19px;
+    }
+}
