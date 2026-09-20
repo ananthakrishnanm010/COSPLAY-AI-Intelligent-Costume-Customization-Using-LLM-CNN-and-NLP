@@ -10,6 +10,7 @@ import orderRoutes from './routes/orderRoutes.js';
 import healthRoutes from './routes/health.js';
 import brandRoutes from './routes/brandRoutes.js';
 import sizeRoutes from './routes/sizeRoutes.js';
+import aiGenerationRoutes from './routes/aiGenerationRoutes.js';
 import customDesignRoutes from './routes/customDesignRoutes.js';
 
 const app = express();
@@ -50,6 +51,7 @@ app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/cart', cartRoutes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/reference-images', referenceImageRoutes);
+app.use('/api/v1/generate-design', aiGenerationRoutes);
 
 // 404 handler for unmatched routes
 app.use((_req, res) => {

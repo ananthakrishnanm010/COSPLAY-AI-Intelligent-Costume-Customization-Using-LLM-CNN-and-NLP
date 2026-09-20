@@ -97,8 +97,11 @@ function AIDesignPage() {
     const [generationStep, setGenerationStep] = useState(0);
     const [generationComplete, setGenerationComplete] = useState(false);
     const [generationPayload, setGenerationPayload]   = useState(null);
+    const [generationError, setGenerationError]       = useState(null);
+    const [generatedImage, setGeneratedImage] = useState(null);
 
     const referenceInputRef = useRef(null);
+    const generationRunRef  = useRef(0);   // lets reset() invalidate an in-flight generation
     const topRef            = useRef(null);
 
     // ── helpers ─────────────────────────────────────────────
@@ -307,34 +310,73 @@ function AIDesignPage() {
                 : null,
         };
 
+        const runId   = ++generationRunRef.current;
+        const isStale = () => runId !== generationRunRef.current;
+
         setGenerationPayload(payload);
+        setGenerationError(null);
+        setGeneratedImage(null);
         setIsGenerating(true);
         setGenerationStep(0);
         setGenerationComplete(false);
 
-                // Persist to backend (existing logic preserved)
+        // 1) Optional reference-image upload  2) AI generation.
+        //    Only garmentType, creativePrompt and (if present) referenceImageUrl are sent to the AI.
+        let referenceImageUrl = null;
+        try {
+            if (referenceImage?.file) {
+                const formData = new FormData();
+                formData.append('image', referenceImage.file);
+
+                const uploadResponse = await apiClient.post(
+                    '/reference-images',
+                    formData,
+                    {
+                        headers: {
+                            'Content-Type': undefined,
+                        },
+                    }
+                );
+
+                if (!uploadResponse.data?.success || !uploadResponse.data?.referenceImageUrl) {
+                    throw new Error('Reference image upload failed. Please try again.');
+                }
+                referenceImageUrl = uploadResponse.data.referenceImageUrl;
+            }
+            if (isStale()) return;
+
+            const response = await apiClient.post('/generate-design', {
+                garmentType:    garmentTypeEnum,
+                creativePrompt: creativePrompt?.trim() || '',
+                ...(referenceImageUrl && { referenceImageUrl }),
+            });
+
+            if (isStale()) return;
+            if (!response.data?.success || !response.data?.imageBase64) {
+                throw new Error('Design generation failed. Please try again.');
+            }
+
+            const generatedImageUrl =
+                `data:${response.data.mimeType};base64,${response.data.imageBase64}`;
+
+            setGeneratedImage(generatedImageUrl);
+            setGenerationComplete(true);
+            setIsGenerating(false);
+        } catch (err) {
+            console.error('Error generating design:', err);
+            if (isStale()) return;
+            setGenerationError(
+                err?.response?.data?.message ||
+                (err?.isAxiosError ? null : err?.message) ||
+                'Unable to generate your design. Please try again.'
+            );
+            setIsGenerating(false);
+            return; // stop here: nothing is persisted for a failed generation
+        }
+
+        // Persist to backend (existing logic preserved)
         try {
             if (garmentTypeEnum && designState.sizeId) {
-                let referenceImageUrl = null;
-
-                // Upload the existing reference image file, if provided.
-                if (referenceImage?.file) {
-                    const formData = new FormData();
-                    formData.append('image', referenceImage.file);
-
-                    const uploadResponse = await apiClient.post(
-                        '/reference-images',
-                        formData,
-                        {
-                            headers: {
-                                'Content-Type': undefined,
-                            },
-                        }
-                    );
-
-                    referenceImageUrl = uploadResponse.data.referenceImageUrl;
-                }
-
                 const promptStr = [color, fit, style, garmentLabel, design && `with ${design} artwork`]
                     .filter(Boolean)
                     .join(' ');
@@ -370,7 +412,6 @@ function AIDesignPage() {
             'Applying garment...',
             'Applying color and design...',
             'Applying your selected style...',
-            'Applying size adjustments...',
             'Generating your design...',
         ];
 
@@ -383,9 +424,8 @@ function AIDesignPage() {
             if (current < steps.length) {
                 setGenerationStep(current);
             } else {
+                // Hold on the final step; handleGenerateDesign sets completion when the API responds.
                 clearInterval(interval);
-                setGenerationComplete(true);
-                setIsGenerating(false);
             }
         }, 1200);
 
@@ -395,6 +435,7 @@ function AIDesignPage() {
     // ── reset ────────────────────────────────────────────────
 
     const reset = () => {
+        generationRunRef.current += 1;
         setStep(STEPS.GARMENT);
         setDesignState(initialDesignState);
         setBrands([]);
@@ -407,6 +448,8 @@ function AIDesignPage() {
         setGenerationStep(0);
         setGenerationComplete(false);
         setGenerationPayload(null);
+        setGenerationError(null);
+        setGeneratedImage(null);
         scrollTop();
     };
 
@@ -791,6 +834,10 @@ function AIDesignPage() {
                     </div>
                 </div>
 
+                {generationError && (
+                    <div className="wf-error" style={{ marginTop: 24 }}>⚠️ {generationError}</div>
+                )}
+
                 {/* Generate button */}
                 <div className="wf-fit-actions" style={{ marginTop: 24 }}>
                     <button
@@ -857,28 +904,36 @@ function AIDesignPage() {
                         <div>
                             <span className="generated-design-label">AI GENERATED CONCEPT</span>
                             <h3>Your Design</h3>
-                            <p>Design ready — image generation API will be integrated here.</p>
+                            <p>Design ready — your generated design is ready.</p>
                         </div>
                         <div className="generated-design-status">✓ Ready</div>
                     </div>
 
                     <div className="generated-design-preview">
-                        {/* SVG garment preview (existing) */}
+                        {/* Generated image (from AI) or SVG garment preview (existing fallback) */}
                         <div className="generated-shirt">
-                            <svg viewBox="0 0 400 500" className="generated-shirt-svg">
-                                <ellipse cx="200" cy="465" rx="105" ry="18" fill="#dddddd" />
-                                <path d="M105 100 L35 145 L75 220 L125 190 Z" fill={shirtColor} />
-                                <path d="M295 100 L365 145 L325 220 L275 190 Z" fill={shirtColor} />
-                                <path d="M105 90 Q200 55 295 90 L275 435 Q200 460 125 435 Z" fill={shirtColor} />
-                                <path d="M155 75 Q200 115 245 75 Q230 130 200 132 Q170 130 155 75" fill="#ffffff" opacity="0.15" />
-                                <circle cx="200" cy="230" r="72" fill="#ffffff" opacity="0.1" />
-                                <text x="200" y="220" textAnchor="middle" fill="#ffffff" fontSize="18" fontWeight="bold" opacity="0.85">
-                                    {d.garmentLabel || 'Design'}
-                                </text>
-                                <text x="200" y="245" textAnchor="middle" fill="#ffffff" fontSize="11" opacity="0.6">
-                                    {d.brandName ? `${d.brandName} ${d.sizeLabel || ''}`.trim() : ''}
-                                </text>
-                            </svg>
+                            {generatedImage ? (
+                                <img
+                                    className="generated-shirt-svg"
+                                    src={generatedImage}
+                                    alt="AI generated design"
+                                />
+                            ) : (
+                                <svg viewBox="0 0 400 500" className="generated-shirt-svg">
+                                    <ellipse cx="200" cy="465" rx="105" ry="18" fill="#dddddd" />
+                                    <path d="M105 100 L35 145 L75 220 L125 190 Z" fill={shirtColor} />
+                                    <path d="M295 100 L365 145 L325 220 L275 190 Z" fill={shirtColor} />
+                                    <path d="M105 90 Q200 55 295 90 L275 435 Q200 460 125 435 Z" fill={shirtColor} />
+                                    <path d="M155 75 Q200 115 245 75 Q230 130 200 132 Q170 130 155 75" fill="#ffffff" opacity="0.15" />
+                                    <circle cx="200" cy="230" r="72" fill="#ffffff" opacity="0.1" />
+                                    <text x="200" y="220" textAnchor="middle" fill="#ffffff" fontSize="18" fontWeight="bold" opacity="0.85">
+                                        {d.garmentLabel || 'Design'}
+                                    </text>
+                                    <text x="200" y="245" textAnchor="middle" fill="#ffffff" fontSize="11" opacity="0.6">
+                                        {d.brandName ? `${d.brandName} ${d.sizeLabel || ''}`.trim() : ''}
+                                    </text>
+                                </svg>
+                            )}
                         </div>
 
                         {/* Info panel */}

@@ -24,6 +24,10 @@ services:
       NODE_ENV: development
       PORT: 5000
       DATABASE_URL: postgresql://postgres:MINNU@db:5432/Cosplay?schema=public
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      IMAGE_PROVIDER: ${IMAGE_PROVIDER}
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
     depends_on:
       - db
 
