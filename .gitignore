@@ -43,3 +43,6 @@ coverage/
 # Uploaded files
 front-end/server/src/uploads/*
 !front-end/server/src/uploads/.gitkeep
+
+# Reference image uploads
+front-end/server/uploads/

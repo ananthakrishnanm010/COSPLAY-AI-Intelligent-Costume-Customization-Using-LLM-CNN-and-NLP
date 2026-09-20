@@ -312,9 +312,29 @@ function AIDesignPage() {
         setGenerationStep(0);
         setGenerationComplete(false);
 
-        // Persist to backend (existing logic preserved)
+                // Persist to backend (existing logic preserved)
         try {
             if (garmentTypeEnum && designState.sizeId) {
+                let referenceImageUrl = null;
+
+                // Upload the existing reference image file, if provided.
+                if (referenceImage?.file) {
+                    const formData = new FormData();
+                    formData.append('image', referenceImage.file);
+
+                    const uploadResponse = await apiClient.post(
+                        '/reference-images',
+                        formData,
+                        {
+                            headers: {
+                                'Content-Type': undefined,
+                            },
+                        }
+                    );
+
+                    referenceImageUrl = uploadResponse.data.referenceImageUrl;
+                }
+
                 const promptStr = [color, fit, style, garmentLabel, design && `with ${design} artwork`]
                     .filter(Boolean)
                     .join(' ');
@@ -323,13 +343,16 @@ function AIDesignPage() {
                     userId:          user?.id || 'demo-user-id',
                     garmentType:     garmentTypeEnum,
                     designPrompt:    creativePrompt?.trim() || promptStr || 'Custom Design',
-                    referenceImages: [],
+                    referenceImages: referenceImageUrl
+                        ? [referenceImageUrl]
+                        : [],
                     baseBrandSizeId: designState.sizeId,
                     alterations: (alterations || []).map((a) => ({
                         measurementTypeId: a.measurementTypeId,
                         adjustment:        Number(a.adjustment) || 0,
                     })),
                 });
+
                 console.log('CustomDesign saved successfully.');
             }
         } catch (err) {
