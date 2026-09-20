@@ -3,6 +3,11 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { generateDesignImage } from '../services/imageService.js';
+import {
+  validateCustomizationInput,
+  validateParsedCustomization,
+} from '../validators/customizationValidation.js';
+
 const router = express.Router();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -14,50 +19,74 @@ router.post('/', async (req, res) => {
       garmentType,
       creativePrompt,
       referenceImageUrl,
+      parsedCustomization,
     } = req.body;
 
-    if (!garmentType) {
-      return res.status(400).json({
+    // Customization validation
+    const inputValidation = validateCustomizationInput({
+      garmentType,
+      creativePrompt,
+    });
+
+    if (!inputValidation.valid) {
+      return res.status(422).json({
         success: false,
-        message: 'Garment type is required.',
+        code: inputValidation.code,
+        message: inputValidation.message,
       });
     }
 
-    if (!creativePrompt?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Creative prompt is required.',
-      });
-    }
+    // COS-46:
+    // If an LLM/parser result is supplied, validate it before
+    // allowing the request to proceed to image generation.
+    if (parsedCustomization !== undefined) {
+      const llmValidation =
+        validateParsedCustomization(parsedCustomization);
 
+      if (!llmValidation.valid) {
+        return res.status(422).json({
+          success: false,
+          code: llmValidation.code,
+          message: llmValidation.message,
+          details: {
+            missingFields: llmValidation.missingFields,
+          },
+        });
+      }
+    }
 
     // Convert the stored reference-image URL into a local file path.
     let referenceImageBase64;
     let referenceImageMimeType;
 
     if (referenceImageUrl) {
-    const relativePath = referenceImageUrl.replace(/^\/uploads\//, '');
-    const imagePath = path.join(__dirname, '..', 'uploads', relativePath);
+      const relativePath = referenceImageUrl.replace(/^\/uploads\//, '');
+      const imagePath = path.join(
+        __dirname,
+        '..',
+        'uploads',
+        relativePath
+      );
 
-    const imageBuffer = await fs.readFile(imagePath);
-    referenceImageBase64 = imageBuffer.toString('base64');
+      const imageBuffer = await fs.readFile(imagePath);
+      referenceImageBase64 = imageBuffer.toString('base64');
 
-    const extension = path.extname(imagePath).toLowerCase();
+      const extension = path.extname(imagePath).toLowerCase();
 
-    const mimeTypes = {
+      const mimeTypes = {
         '.jpg': 'image/jpeg',
         '.jpeg': 'image/jpeg',
         '.png': 'image/png',
         '.webp': 'image/webp',
-    };
+      };
 
-    referenceImageMimeType =
+      referenceImageMimeType =
         mimeTypes[extension] || 'image/png';
     }
 
     const result = await generateDesignImage({
-      garmentType,
-      creativePrompt,
+      garmentType: inputValidation.data.garmentType,
+      creativePrompt: inputValidation.data.creativePrompt,
       referenceImageBase64,
       referenceImageMimeType,
     });
@@ -68,7 +97,7 @@ router.post('/', async (req, res) => {
       mimeType: result.mimeType,
     });
   } catch (error) {
-    console.error('Gemini generation error:', error);
+    console.error('Design generation error:', error);
 
     return res.status(500).json({
       success: false,
