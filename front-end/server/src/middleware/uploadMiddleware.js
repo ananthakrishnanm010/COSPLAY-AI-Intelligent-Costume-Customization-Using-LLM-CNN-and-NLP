@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 const uploadDirectory = path.resolve(
   __dirname,
-  '../../uploads/reference-images'
+  '../uploads/reference-images'
 );
 
 fs.mkdirSync(uploadDirectory, { recursive: true });

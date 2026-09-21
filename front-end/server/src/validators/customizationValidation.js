@@ -2,10 +2,8 @@ const SUPPORTED_GARMENT_TYPES = new Set([
   "TSHIRT",
   "SHIRT",
   "HOODIE",
-  "SWEATSHIRT",
-  "JACKET",
-  "PANTS",
-  "SHORTS",
+  "JEANS",
+  "PANTS"
 ]);
 
 const FASHION_KEYWORDS = [
@@ -13,10 +11,7 @@ const FASHION_KEYWORDS = [
   "t-shirt",
   "tshirt",
   "hoodie",
-  "sweatshirt",
-  "jacket",
   "pants",
-  "shorts",
   "garment",
   "clothing",
   "wear",
