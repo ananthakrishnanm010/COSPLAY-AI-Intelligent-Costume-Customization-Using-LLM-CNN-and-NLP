@@ -50,18 +50,19 @@ function SizeAdjuster({
 
     const handleSave = () => {
         // Build alterations array for backend API persistence
-        const alterations = (measurements || []).map((m) => {
-            const key = getMeasurementKey(m);
-            const adj = adjustments[key] ?? 0;
-            return {
-                measurementTypeId: m.measurementTypeId || m.measurementType?.id,
-                measurementKey: m.measurementType?.key,
-                label: m.measurementType?.label,
-                adjustment: adj,
-                baseValue: m.value,
-                finalValue: Number((m.value + adj).toFixed(2)),
-            };
-        });
+const alterations = (measurements || []).map((m) => {
+    const key = getMeasurementKey(m);
+    const adj = adjustments[key] ?? 0;
+    return {
+        measurementTypeId: m.measurementTypeId || m.measurementType?.id,
+        measurementKey: m.measurementType?.key,
+        label: m.measurementType?.label,
+        unit: m.measurementType?.unit || 'cm',
+        adjustment: adj,
+        baseValue: m.value,
+        finalValue: Number((m.value + adj).toFixed(2)),
+    };
+});
 
         if (onSave) {
             onSave(adjustments, alterations);
@@ -345,4 +346,4 @@ function SizeAdjuster({
 }
 
 export default SizeAdjuster;
-
+
