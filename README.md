@@ -44,7 +44,7 @@ Express API server (:5000)
    ├── Reference Image Upload ────────► local disk (uploads/reference-images)
    ├── Custom Design API ─────────────► measurement calculation + PostgreSQL
    └── AI Generation API ─────────────► generateDesignImage()
-                                          ├── geminiService (default, Gemini image model)
+                                          ├── geminiService (optional, Gemini image model)
                                           └── cloudflareService (Workers AI, FLUX.2 klein)
 
 Standalone AI backend (:8000) ────────► scaffold only (health check), not yet in the request path
