@@ -26,10 +26,10 @@ https://ananthakrishnanm010.atlassian.net/jira/software/projects/COS/boards/34/b
 |---|---|
 | Frontend | React 18, Vite, React Router, Axios |
 | Backend | Express (Node.js 20), JWT authentication, Multer uploads |
-| AI backend | Express service (scaffold, port 8000) |
+| AI backend | Express service (scaffold, port 8000 — not yet wired into the customization flow) |
 | Database | PostgreSQL with Prisma ORM |
-| AI — language | LLM API for prompt parsing (planned) |
-| AI — image | Generative image model for reference-guided garment generation (planned) |
+| AI — language | LLM-based prompt parsing (validation layer in place; parser call planned) |
+| AI — image | Reference-guided garment image generation via Gemini (`gemini-3.1-flash-image`), with a pluggable Cloudflare Workers AI (FLUX.2 klein) provider |
 | Infrastructure | Docker Compose |
 
 ## Architecture Overview
@@ -43,10 +43,14 @@ Express API server (:5000)
    ├── Brand & Size API ──────────────► PostgreSQL (brand/measurement data)
    ├── Reference Image Upload ────────► local disk (uploads/reference-images)
    ├── Custom Design API ─────────────► measurement calculation + PostgreSQL
-   └── AI backend (:8000) ────────────► LLM parsing + image generation (planned)
+   └── AI Generation API ─────────────► generateDesignImage()
+                                          ├── geminiService (default, Gemini image model)
+                                          └── cloudflareService (Workers AI, FLUX.2 klein)
+
+Standalone AI backend (:8000) ────────► scaffold only (health check), not yet in the request path
 ```
 
-**Flow:** pick garment type → pick brand & size → adjust measurements → describe the design and attach a reference image → design and calculated alterations are saved → AI generation produces the customized garment image (planned) → result shown to user, refinable via further prompts.
+**Flow:** pick garment type → pick brand & size → adjust measurements → describe the design and attach a reference image → design and calculated alterations are saved → the API server calls the configured image provider (Gemini by default) to generate the customized garment image, using the reference image and prompt → result shown to user, refinable via further prompts. LLM-based parsing of the free-form prompt into structured fields (color, fit, style, design) is validated end-to-end but the parser call itself is still planned; today the raw prompt is sent straight to image generation.
 
 ## Project Structure
 
@@ -54,7 +58,7 @@ Express API server (:5000)
 .
 ├── docker-compose.yml
 ├── LICENSE
-├── back-end/                # AI backend scaffold
+├── back-end/                # standalone AI backend scaffold (unused by the app today)
 │   └── app/                 # app.js, server.js
 └── front-end/
     ├── client/              # React + Vite app
@@ -62,7 +66,12 @@ Express API server (:5000)
     ├── server/              # Express API
     │   ├── prisma/          # schema, migrations, brand seed
     │   ├── data/            # brand_size_charts.csv
-    │   └── src/             # routes, controllers, services, repositories, middleware
+    │   └── src/             # routes, controllers, services, validators, repositories, middleware
+    │       ├── routes/aiGenerationRoutes.js       # POST /api/v1/generate-design
+    │       ├── services/imageService.js           # picks image provider from IMAGE_PROVIDER
+    │       ├── services/geminiService.js           # Gemini image generation (default)
+    │       ├── services/cloudflareService.js       # Cloudflare Workers AI image generation
+    │       └── validators/customizationValidation.js  # prompt + parsed-LLM-output validation
     └── shared/              # constants shared by client and server
 ```
 
@@ -73,6 +82,7 @@ Express API server (:5000)
 - Node.js (v20+)
 - Docker & Docker Compose
 - PostgreSQL (if not running via Docker)
+- An image-generation provider credential: a Gemini API key (default), or a Cloudflare account ID + API token if using the Cloudflare provider
 
 ### Setup
 
@@ -89,7 +99,8 @@ Express API server (:5000)
    echo 'VITE_API_URL=http://localhost:5000/api/v1' > client/.env
    cd ..
    ```
-   When using Docker, `.env` files are excluded from builds, so add `JWT_SECRET` to the `server` service in `docker-compose.yml` instead (and change the default database password).
+   Add your image-generation credentials to `front-end/server/.env` (`GEMINI_API_KEY` by default, or the `CLOUDFLARE_*` variables if you set `IMAGE_PROVIDER=cloudflare`).
+   When using Docker, `.env` files are excluded from builds, so add `JWT_SECRET` (and any AI provider keys you need) to the `server` service in `docker-compose.yml` instead (and change the default database password).
 
 3. Start services with Docker Compose
    ```bash
@@ -117,7 +128,7 @@ Express API server (:5000)
    ```
    `npm run db:seed` adds demo users and products but deletes existing users, products, carts, and orders first.
 
-The client runs at http://localhost:5173, the API at http://localhost:5000, and the AI backend at http://localhost:8000.
+The client runs at http://localhost:5173, the API at http://localhost:5000, and the (currently unused) standalone AI backend scaffold at http://localhost:8000.
 
 ### Environment Variables
 
@@ -129,6 +140,11 @@ The client runs at http://localhost:5173, the API at http://localhost:5000, and 
 | `PORT` | API server port (default `5000`) |
 | `CLIENT_URL` | Allowed CORS origin (default `http://localhost:5173`) |
 | `VITE_API_URL` | API base URL used by the client |
+| `IMAGE_PROVIDER` | Image generation backend: `gemini` (default) or `cloudflare` |
+| `GEMINI_API_KEY` | Required when `IMAGE_PROVIDER=gemini` |
+| `CLOUDFLARE_ACCOUNT_ID` | Required when `IMAGE_PROVIDER=cloudflare` |
+| `CLOUDFLARE_API_TOKEN` | Required when `IMAGE_PROVIDER=cloudflare`; needs Workers AI permission |
+| `CLOUDFLARE_IMAGE_SIZE` | Optional, default `1024`; `512` uses far fewer free Neurons |
 
 ## API Overview
 
@@ -144,6 +160,7 @@ Base URL: `http://localhost:5000/api/v1`
 | `GET /sizes/:sizeId/measurements` | Retrieve standard measurements for a size |
 | `POST /reference-images` | Upload a reference garment image |
 | `POST /custom-designs` | Save a design and calculate measurement alterations |
+| `POST /generate-design` | Generate a customized garment image from a prompt, garment type, and (optional) reference image |
 | `/products`, `/cart`, `/orders` | Storefront endpoints |
 
 ## Roadmap
@@ -152,8 +169,8 @@ Base URL: `http://localhost:5000/api/v1`
 - [x] Frontend customization flow — garment, brand/size selection, fit, design, review screens
 - [x] Backend brand & measurement management APIs
 - [x] Deterministic measurement calculation
-- [ ] LLM-based customization parsing and validation
-- [ ] AI garment generation with reference-image preservation
+- [x] AI garment generation with reference-image preservation (Gemini, with a Cloudflare Workers AI fallback provider)
+- [ ] LLM-based customization prompt parsing (structured-output validation is in place; parser call still to be wired in)
 - [ ] End-to-end pipeline integration
 - [ ] E2E testing, UI polish, and demo handoff
 
