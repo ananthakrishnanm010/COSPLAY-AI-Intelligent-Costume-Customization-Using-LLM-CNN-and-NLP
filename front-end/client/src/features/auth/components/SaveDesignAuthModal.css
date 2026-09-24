@@ -1,0 +1,173 @@
+.save-design-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 24px;
+
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.save-design-modal {
+    position: relative;
+
+    width: 100%;
+    max-width: 440px;
+
+    padding: 40px;
+
+    background: var(--bg, #ffffff);
+    border: 1px solid var(--line, #dddddd);
+
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.save-design-modal-close {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+
+    border: none;
+    background: transparent;
+
+    font-size: 26px;
+    line-height: 1;
+
+    color: var(--ink, #111111);
+
+    cursor: pointer;
+}
+
+.save-design-modal-header {
+    margin-bottom: 28px;
+    text-align: center;
+}
+
+.save-design-modal-header h2 {
+    margin: 0 0 8px;
+
+    font-family: var(--font-display, sans-serif);
+    font-size: 24px;
+    font-weight: 400;
+
+    color: var(--ink, #111111);
+}
+
+.save-design-modal-header p {
+    margin: 0;
+
+    font-size: 13px;
+    line-height: 1.6;
+
+    color: var(--ink-soft, #777777);
+}
+
+.save-design-field {
+    margin-bottom: 18px;
+}
+
+.save-design-field label {
+    display: block;
+
+    margin-bottom: 7px;
+
+    font-size: 12px;
+    font-weight: 500;
+
+    color: var(--ink, #111111);
+}
+
+.save-design-field input {
+    width: 100%;
+    box-sizing: border-box;
+
+    padding: 12px 13px;
+
+    border: 1px solid var(--line, #dddddd);
+    outline: none;
+
+    background: var(--bg, #ffffff);
+
+    font-size: 14px;
+    color: var(--ink, #111111);
+
+    transition: border-color 0.2s ease;
+}
+
+.save-design-field input:focus {
+    border-color: var(--ink, #111111);
+}
+
+.save-design-auth-error {
+    margin-bottom: 16px;
+    padding: 10px 12px;
+
+    border: 1px solid #d8a0a0;
+
+    background: #fff7f7;
+
+    font-size: 12px;
+    line-height: 1.5;
+
+    color: #9a3030;
+}
+
+.save-design-auth-submit {
+    width: 100%;
+
+    padding: 13px 16px;
+
+    border: 1px solid var(--ink, #111111);
+
+    background: var(--ink, #111111);
+    color: white;
+
+    font-size: 13px;
+    font-weight: 500;
+
+    cursor: pointer;
+
+    transition:
+        opacity 0.2s ease,
+        transform 0.2s ease;
+}
+
+.save-design-auth-submit:hover {
+    opacity: 0.9;
+}
+
+.save-design-auth-submit:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.save-design-auth-switch {
+    margin-top: 22px;
+
+    padding-top: 18px;
+
+    border-top: 1px solid var(--line, #dddddd);
+
+    text-align: center;
+
+    font-size: 12px;
+    color: var(--ink-soft, #777777);
+}
+
+.save-design-auth-switch button {
+    padding: 0;
+
+    border: none;
+    background: transparent;
+
+    color: var(--ink, #111111);
+
+    font-size: 12px;
+    font-weight: 500;
+
+    cursor: pointer;
+}
