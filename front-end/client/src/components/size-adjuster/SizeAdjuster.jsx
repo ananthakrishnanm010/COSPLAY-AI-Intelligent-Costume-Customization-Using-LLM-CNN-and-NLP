@@ -1,32 +1,76 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import './SizeAdjuster.css';
 
 function SizeAdjuster({
-    garmentType = 'SHIRT',
+    garmentType = 'TSHIRT',
     brandName = '',
     sizeLabel = '',
     measurements = [],
     initialAdjustments = {},
     onSave,
 }) {
-    // State holding numeric adjustments (+/- offset in inches) keyed by measurementTypeId or key
     const [adjustments, setAdjustments] = useState({});
 
-    // Helper for robust key resolution per measurement item
-    const getMeasurementKey = (m) => m.measurementTypeId || m.measurementType?.id || m.measurementType?.key;
+    /* =========================================
+       MEASUREMENT HELPERS
+    ========================================= */
+
+    const getMeasurementKey = (m) => {
+        return (
+            m?.measurementType?.key ||
+            m?.measurementType?.id ||
+            m?.measurementTypeId
+        );
+    };
+
+    const getMeasurement = (key) => {
+        return (measurements || []).find(
+            (m) =>
+                String(
+                    m?.measurementType?.key || ''
+                ).toLowerCase() === key.toLowerCase()
+        );
+    };
+
+    const getValue = (key, fallback = 0) => {
+        const measurement = getMeasurement(key);
+
+        if (!measurement) {
+            return fallback;
+        }
+
+        const measurementKey =
+            getMeasurementKey(measurement);
+
+        return (
+            Number(measurement.value || 0) +
+            Number(adjustments[measurementKey] || 0)
+        );
+    };
+
+    /* =========================================
+       INITIALIZE ADJUSTMENTS
+    ========================================= */
 
     useEffect(() => {
         const initial = {};
-        if (measurements && measurements.length > 0) {
-            measurements.forEach((m) => {
-                const key = getMeasurementKey(m);
-                if (key) {
-                    initial[key] = initialAdjustments[key] ?? 0;
-                }
-            });
-        }
+
+        (measurements || []).forEach((m) => {
+            const key = getMeasurementKey(m);
+
+            if (key) {
+                initial[key] = Number(
+                    initialAdjustments?.[key] ?? 0
+                );
+            }
+        });
+
         setAdjustments(initial);
     }, [measurements, initialAdjustments]);
+
+    /* =========================================
+       HANDLE SLIDER CHANGE
+    ========================================= */
 
     const handleChange = (key, value) => {
         setAdjustments((prev) => ({
@@ -35,315 +79,813 @@ function SizeAdjuster({
         }));
     };
 
+    /* =========================================
+       RESET
+    ========================================= */
+
     const resetAdjustments = () => {
-        const resetObj = {};
-        if (measurements && measurements.length > 0) {
-            measurements.forEach((m) => {
-                const key = getMeasurementKey(m);
-                if (key) {
-                    resetObj[key] = 0;
-                }
-            });
-        }
-        setAdjustments(resetObj);
+        const reset = {};
+
+        (measurements || []).forEach((m) => {
+            const key = getMeasurementKey(m);
+
+            if (key) {
+                reset[key] = 0;
+            }
+        });
+
+        setAdjustments(reset);
     };
+
+    /* =========================================
+       SAVE
+    ========================================= */
 
     const handleSave = () => {
-        // Build alterations array for backend API persistence
-const alterations = (measurements || []).map((m) => {
-    const key = getMeasurementKey(m);
-    const adj = adjustments[key] ?? 0;
-    return {
-        measurementTypeId: m.measurementTypeId || m.measurementType?.id,
-        measurementKey: m.measurementType?.key,
-        label: m.measurementType?.label,
-        unit: m.measurementType?.unit || 'cm',
-        adjustment: adj,
-        baseValue: m.value,
-        finalValue: Number((m.value + adj).toFixed(2)),
-    };
-});
+        const alterations = (measurements || []).map(
+            (m) => {
+                const key = getMeasurementKey(m);
+
+                const adjustment = Number(
+                    adjustments[key] || 0
+                );
+
+                return {
+                    measurementTypeId:
+                        m.measurementTypeId ||
+                        m.measurementType?.id,
+
+                    measurementKey:
+                        m.measurementType?.key,
+
+                    label:
+                        m.measurementType?.label,
+
+                    unit:
+                        m.measurementType?.unit ||
+                        'inch',
+
+                    adjustment,
+
+                    baseValue:
+                        Number(m.value),
+
+                    finalValue:
+                        Number(
+                            (
+                                Number(m.value) +
+                                adjustment
+                            ).toFixed(2)
+                        ),
+                };
+            }
+        );
 
         if (onSave) {
-            onSave(adjustments, alterations);
+            onSave(
+                adjustments,
+                alterations
+            );
         }
     };
 
-    // Calculate visual adjustment metrics for SVG preview
-    const findAdjByKey = (keySearch) => {
-        const match = (measurements || []).find(
-            (m) => m.measurementType?.key?.toLowerCase().includes(keySearch)
-        );
-        if (!match) return 0;
-        const key = getMeasurementKey(match);
-        return adjustments[key] ?? 0;
-    };
+    /* =========================================
+       CURRENT MEASUREMENTS
+    ========================================= */
 
-    const chestAdj = findAdjByKey('chest');
-    const waistAdj = findAdjByKey('waist');
-    const shoulderAdj = findAdjByKey('shoulder');
-    const lengthAdj = findAdjByKey('length');
-    const sleeveAdj = findAdjByKey('sleeve');
+    const chest = getValue(
+        'chest',
+        38
+    );
 
-    const shirtWidth = 220 + chestAdj * 8;
-    const shirtBottomWidth = 190 + waistAdj * 7;
-    const shoulderWidth = 250 + shoulderAdj * 8;
-    const sleeveSize = 45 + sleeveAdj * 5;
+    const shoulder = getValue(
+        'shoulder',
+        16.5
+    );
 
-    const renderGarmentPreview = () => {
-        const normGarment = String(garmentType || '').toUpperCase();
-        const isJeans =
-            normGarment.includes('JEANS') ||
-            normGarment.includes('PANTS') ||
-            normGarment.includes('TROUSER');
-        const isHoodie = normGarment.includes('HOODIE');
-        const isShirt = normGarment === 'SHIRT';
+    const sleeveLength = getValue(
+        'sleeve_length',
+        8
+    );
 
-        if (isJeans) {
-            const hipAdj = findAdjByKey('hip') || findAdjByKey('seat');
-            const inseamAdj = findAdjByKey('inseam');
-            const wWidth = 140 + waistAdj * 6;
-            const hWidth = 170 + (hipAdj || waistAdj) * 6;
-            const legLength = 260 + (inseamAdj || lengthAdj) * 7;
-            const crotchY = 160 + (hipAdj || waistAdj) * 2;
+    const bodyLength = getValue(
+        'length',
+        27
+    );
 
-            return (
-                <svg viewBox="0 0 400 420" className="shirt-svg" aria-label="Adjustable Jeans preview">
-                    <ellipse cx="200" cy="395" rx={hWidth / 2.2} ry="12" className="shirt-shadow" />
-                    <path
-                        d={`
-                            M ${200 - wWidth / 2} 70
-                            L ${200 + wWidth / 2} 70
-                            Q ${200 + hWidth / 2} 110 ${200 + hWidth / 2 - 10} ${crotchY}
-                            L ${200 + hWidth / 2 - 20} ${70 + legLength}
-                            L 210 ${70 + legLength}
-                            L 200 ${crotchY}
-                            L 190 ${70 + legLength}
-                            L ${200 - hWidth / 2 + 20} ${70 + legLength}
-                            L ${200 - hWidth / 2 + 10} ${crotchY}
-                            Q ${200 - hWidth / 2} 110 ${200 - wWidth / 2} 70
-                            Z
-                        `}
-                        className="shirt-body"
-                    />
-                    <line x1={200 - wWidth / 2} y1="90" x2={200 + wWidth / 2} y2="90" stroke="#111" strokeWidth="2" />
-                    <path d={`M 200 90 L 200 ${crotchY - 20} Q 200 ${crotchY} 210 ${crotchY}`} fill="none" stroke="#111" strokeWidth="2" />
-                    <text x="200" y="210" textAnchor="middle" className="shirt-design">JEANS FIT</text>
-                </svg>
-            );
-        }
+    /* Optional measurements */
+    const waist = getValue(
+        'waist',
+        0
+    );
 
-        if (isHoodie) {
-            const shirtWidth = 220 + chestAdj * 8;
-            const shirtBottomWidth = 190 + waistAdj * 7;
-            const shoulderWidth = 250 + shoulderAdj * 8;
-            const sleeveSize = 65 + sleeveAdj * 7;
+    const hip = getValue(
+        'hip',
+        0
+    );
 
-            return (
-                <svg viewBox="0 0 400 420" className="shirt-svg" aria-label="Adjustable Hoodie preview">
-                    <ellipse cx="200" cy="395" rx={shirtWidth / 2.4} ry="12" className="shirt-shadow" />
-                    <path d="M 160 85 Q 200 15 240 85 Z" fill="#333" stroke="#111" strokeWidth="2" />
-                    <path
-                        d={`
-                            M ${200 - shoulderWidth / 2} 85
-                            L ${200 - shirtWidth / 2} 125
-                            L ${200 - shirtWidth / 2 - sleeveSize} 240
-                            L ${200 - shirtWidth / 2 - sleeveSize + 15} 265
-                            L ${200 - shirtWidth / 2 + 5} 220
-                            L ${200 - shirtWidth / 2 + 25} 175
-                            L ${200 - shirtBottomWidth / 2} ${350 + lengthAdj * 4}
-                            L ${200 + shirtBottomWidth / 2} ${350 + lengthAdj * 4}
-                            L ${200 + shirtWidth / 2 - 25} 175
-                            L ${200 + shirtWidth / 2 - 5} 220
-                            L ${200 + shirtWidth / 2 + sleeveSize - 15} 265
-                            L ${200 + shirtWidth / 2 + sleeveSize} 240
-                            L ${200 + shirtWidth / 2} 125
-                            L ${200 + shoulderWidth / 2} 85
-                            L 230 75
-                            Q 200 105 170 75
-                            Z
-                        `}
-                        className="shirt-body"
-                    />
-                    <path d={`M 150 ${280 + lengthAdj * 2} L 250 ${280 + lengthAdj * 2} L 260 ${340 + lengthAdj * 3} L 140 ${340 + lengthAdj * 3} Z`} fill="none" stroke="#111" strokeWidth="2" />
-                    <text x="200" y="215" textAnchor="middle" className="shirt-design">HOODIE FIT</text>
-                </svg>
-            );
-        }
+    const inseam = getValue(
+        'inseam',
+        0
+    );
 
-        if (isShirt) {
-            const shirtWidth = 220 + chestAdj * 8;
-            const shirtBottomWidth = 190 + waistAdj * 7;
-            const shoulderWidth = 250 + shoulderAdj * 8;
-            const sleeveSize = 65 + sleeveAdj * 7;
+    /* =========================================
+       CALCULATE T-SHIRT GEOMETRY
+    ========================================= */
 
-            return (
-                <svg viewBox="0 0 400 420" className="shirt-svg" aria-label="Adjustable Shirt preview">
-                    <ellipse cx="200" cy="395" rx={shirtWidth / 2.4} ry="12" className="shirt-shadow" />
-                    <path
-                        d={`
-                            M ${200 - shoulderWidth / 2} 85
-                            L ${200 - shirtWidth / 2} 125
-                            L ${200 - shirtWidth / 2 - sleeveSize} 240
-                            L ${200 - shirtWidth / 2 - sleeveSize + 15} 265
-                            L ${200 - shirtWidth / 2 + 5} 220
-                            L ${200 - shirtWidth / 2 + 25} 175
-                            L ${200 - shirtBottomWidth / 2} ${350 + lengthAdj * 4}
-                            L ${200 + shirtBottomWidth / 2} ${350 + lengthAdj * 4}
-                            L ${200 + shirtWidth / 2 - 25} 175
-                            L ${200 + shirtWidth / 2 - 5} 220
-                            L ${200 + shirtWidth / 2 + sleeveSize - 15} 265
-                            L ${200 + shirtWidth / 2 + sleeveSize} 240
-                            L ${200 + shirtWidth / 2} 125
-                            L ${200 + shoulderWidth / 2} 85
-                            L 235 65
-                            Q 200 115 165 65
-                            Z
-                        `}
-                        className="shirt-body"
-                    />
-                    <line x1="200" y1="85" x2="200" y2={340 + lengthAdj * 4} stroke="#111" strokeWidth="2" strokeDasharray="6,6" />
-                    <path d="M 165 65 L 185 95 L 200 85 L 215 95 L 235 65" fill="none" stroke="#111" strokeWidth="2" />
-                    <text x="200" y="215" textAnchor="middle" className="shirt-design">SHIRT FIT</text>
-                </svg>
-            );
-        }
+    const tshirt = useMemo(() => {
+        /*
+         * These values control the visual
+         * representation of the garment.
+         *
+         * They are proportional values,
+         * not manufacturing pattern values.
+         */
 
-        // Default T-shirt SVG
-        const shirtWidth = 220 + chestAdj * 8;
-        const shirtBottomWidth = 190 + waistAdj * 7;
-        const shoulderWidth = 250 + shoulderAdj * 8;
-        const sleeveSize = 45 + sleeveAdj * 5;
+        const baseChest = 38;
+        const baseLength = 27;
+        const baseSleeve = 8;
+        const baseShoulder = 16.5;
+
+        /*
+         * Body width responds to chest.
+         */
+        const bodyWidth =
+            230 *
+            (chest / baseChest);
+
+        /*
+         * Body height responds to body length.
+         */
+        const bodyHeight =
+            330 *
+            (bodyLength / baseLength);
+
+        /*
+         * Shoulder width responds to shoulder.
+         */
+        const shoulderWidth =
+            220 *
+            (shoulder / baseShoulder);
+
+        /*
+         * IMPORTANT:
+         *
+         * Sleeve length now controls how FAR
+         * the sleeve extends horizontally.
+         *
+         * It does NOT control sleeve thickness.
+         */
+        const sleeveExtension =
+            75 *
+            (sleeveLength / baseSleeve);
+
+        const centerX = 300;
+
+        const leftBody =
+            centerX -
+            bodyWidth / 2;
+
+        const rightBody =
+            centerX +
+            bodyWidth / 2;
+
+        const top = 150;
+
+        const bottom =
+            top + bodyHeight;
+
+        const shoulderLeft =
+            centerX -
+            shoulderWidth / 2;
+
+        const shoulderRight =
+            centerX +
+            shoulderWidth / 2;
+
+        return {
+            bodyWidth,
+            bodyHeight,
+            shoulderWidth,
+            sleeveExtension,
+            centerX,
+            leftBody,
+            rightBody,
+            top,
+            bottom,
+            shoulderLeft,
+            shoulderRight,
+        };
+    }, [
+        chest,
+        shoulder,
+        sleeveLength,
+        bodyLength,
+    ]);
+
+    /* =========================================
+       T-SHIRT SVG
+    ========================================= */
+
+    const renderTshirt = () => {
+        const {
+            bodyWidth,
+            bodyHeight,
+            sleeveExtension,
+            centerX,
+            leftBody,
+            rightBody,
+            top,
+            bottom,
+            shoulderLeft,
+            shoulderRight,
+        } = tshirt;
+
+        /*
+         * Sleeve depth stays visually constant.
+         *
+         * Sleeve LENGTH is represented by
+         * horizontal extension.
+         */
+        const sleeveDepth = 55;
+
+        const leftSleeveEnd =
+            shoulderLeft -
+            sleeveExtension;
+
+        const rightSleeveEnd =
+            shoulderRight +
+            sleeveExtension;
 
         return (
-            <svg viewBox="0 0 400 420" className="shirt-svg" aria-label="Adjustable T-shirt preview">
-                <ellipse cx="200" cy="395" rx={shirtWidth / 2.4} ry="12" className="shirt-shadow" />
+            <svg
+                className="tshirt-svg"
+                viewBox="0 0 600 650"
+                preserveAspectRatio="xMidYMid meet"
+                role="img"
+                aria-label="2D T-shirt fit preview"
+            >
+
+                {/* =================================
+                    CHEST DIMENSION
+                ================================= */}
+
+                <line
+                    x1={leftBody}
+                    y1={top - 35}
+                    x2={rightBody}
+                    y2={top - 35}
+                    className="dimension-line"
+                />
+
+                <line
+                    x1={leftBody}
+                    y1={top - 45}
+                    x2={leftBody}
+                    y2={top - 25}
+                    className="dimension-tick"
+                />
+
+                <line
+                    x1={rightBody}
+                    y1={top - 45}
+                    x2={rightBody}
+                    y2={top - 25}
+                    className="dimension-tick"
+                />
+
+                <text
+                    x={centerX}
+                    y={top - 52}
+                    className="dimension-label"
+                    textAnchor="middle"
+                >
+                    Chest {chest.toFixed(1)}"
+                </text>
+
+                {/* =================================
+                    SHOULDER DIMENSION
+                ================================= */}
+
+                <line
+                    x1={shoulderLeft}
+                    y1={top - 75}
+                    x2={shoulderRight}
+                    y2={top - 75}
+                    className="dimension-line"
+                />
+
+                <line
+                    x1={shoulderLeft}
+                    y1={top - 85}
+                    x2={shoulderLeft}
+                    y2={top - 65}
+                    className="dimension-tick"
+                />
+
+                <line
+                    x1={shoulderRight}
+                    y1={top - 85}
+                    x2={shoulderRight}
+                    y2={top - 65}
+                    className="dimension-tick"
+                />
+
+                <text
+                    x={centerX}
+                    y={top - 92}
+                    className="dimension-label"
+                    textAnchor="middle"
+                >
+                    Shoulder {shoulder.toFixed(1)}"
+                </text>
+
+                {/* =================================
+                    LEFT SLEEVE
+                ================================= */}
+
                 <path
                     d={`
-                        M ${200 - shoulderWidth / 2} 85
-                        L ${200 - shirtWidth / 2} 125
-                        L ${200 - shirtWidth / 2 - sleeveSize} 180
-                        L ${200 - shirtWidth / 2 - sleeveSize + 10} 215
-                        L ${200 - shirtWidth / 2 + 5} 205
-                        L ${200 - shirtWidth / 2 + 25} 175
-                        L ${200 - shirtWidth / 2 + 30} ${105 + sleeveAdj * 3}
-                        L ${200 - shirtBottomWidth / 2} ${350 + lengthAdj * 4}
-                        L ${200 + shirtBottomWidth / 2} ${350 + lengthAdj * 4}
-                        L ${200 + shirtWidth / 2 - 30} ${105 + sleeveAdj * 3}
-                        L ${200 + shirtWidth / 2 - 25} 175
-                        L ${200 + shirtWidth / 2 - 5} 205
-                        L ${200 + shirtWidth / 2 + sleeveSize - 10} 215
-                        L ${200 + shirtWidth / 2 + sleeveSize} 180
-                        L ${200 + shirtWidth / 2} 125
-                        L ${200 + shoulderWidth / 2} 85
-                        L 235 65
-                        Q 200 115 165 65
+                        M ${shoulderLeft} ${top}
+                        L ${leftSleeveEnd} ${top + 28}
+                        L ${leftSleeveEnd + 8}
+                            ${top + sleeveDepth}
+                        L ${leftBody}
+                            ${top + 68}
+                        L ${leftBody}
+                            ${top + 55}
                         Z
                     `}
-                    className="shirt-body"
+                    className="tshirt-sleeve"
                 />
-                <path d="M 165 65 Q 200 115 235 65" className="shirt-neck" />
-                <text x="200" y="235" textAnchor="middle" className="shirt-design">T-SHIRT FIT</text>
+
+                {/* =================================
+                    RIGHT SLEEVE
+                ================================= */}
+
+                <path
+                    d={`
+                        M ${shoulderRight} ${top}
+                        L ${rightSleeveEnd} ${top + 28}
+                        L ${rightSleeveEnd - 8}
+                            ${top + sleeveDepth}
+                        L ${rightBody}
+                            ${top + 68}
+                        L ${rightBody}
+                            ${top + 55}
+                        Z
+                    `}
+                    className="tshirt-sleeve"
+                />
+
+                {/* =================================
+                    MAIN T-SHIRT BODY
+                ================================= */}
+
+                <path
+                    d={`
+                        M ${shoulderLeft} ${top}
+
+                        L ${leftBody}
+                            ${top + 55}
+
+                        L ${leftBody}
+                            ${bottom}
+
+                        L ${rightBody}
+                            ${bottom}
+
+                        L ${rightBody}
+                            ${top + 55}
+
+                        L ${shoulderRight}
+                            ${top}
+
+                        L ${shoulderRight - 45}
+                            ${top - 20}
+
+                        L ${centerX + 32}
+                            ${top - 5}
+
+                        Q ${centerX}
+                            ${top + 35}
+                            ${centerX - 32}
+                            ${top - 5}
+
+                        L ${shoulderLeft + 45}
+                            ${top - 20}
+
+                        Z
+                    `}
+                    className="tshirt-body"
+                />
+
+                {/* =================================
+                    NECKLINE
+                ================================= */}
+
+                <path
+                    d={`
+                        M ${centerX - 32}
+                            ${top - 5}
+
+                        Q ${centerX}
+                            ${top + 38}
+                            ${centerX + 32}
+                            ${top - 5}
+                    `}
+                    className="tshirt-neck"
+                />
+
+                {/* =================================
+                    BODY CENTER LINE
+                ================================= */}
+
+                <line
+                    x1={centerX}
+                    y1={top + 55}
+                    x2={centerX}
+                    y2={bottom - 15}
+                    className="center-line"
+                />
+
+                {/* =================================
+                    BODY LENGTH DIMENSION
+                ================================= */}
+
+                <line
+                    x1={rightBody + 60}
+                    y1={top}
+                    x2={rightBody + 60}
+                    y2={bottom}
+                    className="dimension-line"
+                />
+
+                <line
+                    x1={rightBody + 50}
+                    y1={top}
+                    x2={rightBody + 70}
+                    y2={top}
+                    className="dimension-tick"
+                />
+
+                <line
+                    x1={rightBody + 50}
+                    y1={bottom}
+                    x2={rightBody + 70}
+                    y2={bottom}
+                    className="dimension-tick"
+                />
+
+                <text
+                    x={rightBody + 82}
+                    y={
+                        (top + bottom) / 2
+                    }
+                    className="dimension-label"
+                    textAnchor="middle"
+                    transform={`
+                        rotate(
+                            90
+                            ${rightBody + 82}
+                            ${(top + bottom) / 2}
+                        )
+                    `}
+                >
+                    Body Length {bodyLength.toFixed(1)}"
+                </text>
+
+                {/* =================================
+                    SLEEVE LENGTH DIMENSION
+                ================================= */}
+
+                <line
+                    x1={shoulderLeft}
+                    y1={top + 95}
+                    x2={leftSleeveEnd}
+                    y2={top + 95}
+                    className="dimension-line"
+                />
+
+                <line
+                    x1={shoulderLeft}
+                    y1={top + 87}
+                    x2={shoulderLeft}
+                    y2={top + 103}
+                    className="dimension-tick"
+                />
+
+                <line
+                    x1={leftSleeveEnd}
+                    y1={top + 87}
+                    x2={leftSleeveEnd}
+                    y2={top + 103}
+                    className="dimension-tick"
+                />
+
+                <text
+                    x={
+                        (
+                            shoulderLeft +
+                            leftSleeveEnd
+                        ) / 2
+                    }
+                    y={top + 120}
+                    className="dimension-label"
+                    textAnchor="middle"
+                >
+                    Sleeve {sleeveLength.toFixed(1)}"
+                </text>
             </svg>
         );
     };
 
+    /* =========================================
+       EMPTY STATE
+    ========================================= */
+
+    if (
+        !measurements ||
+        measurements.length === 0
+    ) {
+        return (
+            <div className="size-adjuster">
+                <div className="empty-state">
+                    No measurements are available
+                    for this size.
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="size-adjuster">
-            {/* HEADER */}
-            <div className="size-adjuster-header">
-                <h2>
-                    Adjust Your Fit {brandName && sizeLabel ? `(${brandName} ${sizeLabel})` : ''}
-                </h2>
-                <p>
-                    Adjust your fit measurements visually based on standard {brandName || 'brand'} size charts.
-                </p>
-            </div>
 
-            {/* MAIN CONTENT */}
-            <div className="size-adjuster-content">
-                {/* PREVIEW */}
-                <div className="shirt-preview">
-                    {renderGarmentPreview()}
-                </div>
+            {/* =================================
+                MAIN BORDERED PANEL
+            ================================= */}
 
-                {/* CONTROLS */}
-                <div className="size-controls-container">
-                    {/* CURRENT VALUES BADGES (DYNAMIC) */}
-                    <div className="size-values">
-                        {(measurements || []).map((m) => {
-                            const key = getMeasurementKey(m);
-                            const adj = adjustments[key] ?? 0;
-                            const finalVal = (m.value + adj).toFixed(1);
-                            const unit = m.measurementType?.unit || 'in';
-                            return (
-                                <span key={m.id || key}>
-                                    {m.measurementType?.label}: {finalVal} {unit} ({adj > 0 ? `+${adj}` : adj})
-                                </span>
-                            );
-                        })}
+            <div className="size-adjuster-panel">
+
+                {/* =================================
+                    LEFT: 2D PREVIEW
+                ================================= */}
+
+                <section className="preview-panel">
+
+                    <div className="panel-heading">
+                        <h3>
+                            2D Fit Preview
+                        </h3>
+
+                        <span>
+                            Updates in real time
+                        </span>
                     </div>
 
-                    {/* DYNAMIC SLIDERS DRIVEN BY BACKEND MEASUREMENTS */}
-                    <div className="size-controls">
-                        {(!measurements || measurements.length === 0) && (
-                            <p style={{ color: '#888', fontStyle: 'italic' }}>
-                                Loading measurements from database...
-                            </p>
-                        )}
-                        {(measurements || []).map((m) => {
-                            const key = getMeasurementKey(m);
-                            const adj = adjustments[key] ?? 0;
-                            const baseVal = m.value;
-                            const currentVal = (baseVal + adj).toFixed(1);
-                            const unit = m.measurementType?.unit || 'in';
+                    <div className="preview-canvas">
+                        {renderTshirt()}
+                    </div>
 
-                            return (
-                                <div className="slider-row" key={m.id || key}>
-                                    <div className="slider-label">
-                                        <span>
-                                            {m.measurementType?.label} (Base: {baseVal} {unit})
-                                        </span>
-                                        <span>
-                                            {currentVal} {unit} ({adj > 0 ? `+${adj}` : adj} {unit})
-                                        </span>
+                    {/* =================================
+                        CURRENT VALUES
+                    ================================= */}
+
+                    <div className="preview-values">
+
+                        <div>
+                            <span>
+                                Chest
+                            </span>
+
+                            <strong>
+                                {chest.toFixed(1)}
+                                {' '}
+                                in
+                            </strong>
+                        </div>
+
+                        <div>
+                            <span>
+                                Shoulder
+                            </span>
+
+                            <strong>
+                                {shoulder.toFixed(1)}
+                                {' '}
+                                in
+                            </strong>
+                        </div>
+
+                        <div>
+                            <span>
+                                Sleeve
+                            </span>
+
+                            <strong>
+                                {sleeveLength.toFixed(1)}
+                                {' '}
+                                in
+                            </strong>
+                        </div>
+
+                        <div>
+                            <span>
+                                Length
+                            </span>
+
+                            <strong>
+                                {bodyLength.toFixed(1)}
+                                {' '}
+                                in
+                            </strong>
+                        </div>
+
+                    </div>
+                </section>
+
+                {/* =================================
+                    RIGHT: ADJUSTMENTS
+                ================================= */}
+
+                <section className="controls-panel">
+
+                    <div className="panel-heading">
+
+                        <h3>
+                            Adjust Measurements
+                        </h3>
+
+                        <p>
+                            Move the sliders to
+                            customize your fit.
+                        </p>
+
+                    </div>
+
+                    <div className="sliders-container">
+
+                        {(measurements || []).map(
+                            (m) => {
+                                const key =
+                                    getMeasurementKey(
+                                        m
+                                    );
+
+                                const adjustment =
+                                    Number(
+                                        adjustments[
+                                        key
+                                        ] ?? 0
+                                    );
+
+                                const baseValue =
+                                    Number(
+                                        m.value
+                                    );
+
+                                const finalValue =
+                                    baseValue +
+                                    adjustment;
+
+                                const unit =
+                                    m?.measurementType
+                                        ?.unit ||
+                                    'inch';
+
+                                const label =
+                                    m?.measurementType
+                                        ?.label ||
+                                    m?.measurementType
+                                        ?.key ||
+                                    'Measurement';
+
+                                return (
+                                    <div
+                                        className="slider-row"
+                                        key={
+                                            m.id ||
+                                            key
+                                        }
+                                    >
+
+                                        <div className="slider-top">
+
+                                            <div>
+                                                <label>
+                                                    {
+                                                        label
+                                                    }
+                                                </label>
+
+                                                <small>
+                                                    Base:{' '}
+                                                    {baseValue.toFixed(
+                                                        1
+                                                    )}{' '}
+                                                    {
+                                                        unit
+                                                    }
+                                                </small>
+                                            </div>
+
+                                            <strong>
+                                                {finalValue.toFixed(
+                                                    1
+                                                )}{' '}
+                                                {unit}
+                                            </strong>
+
+                                        </div>
+
+                                        <div className="slider-control">
+
+                                            <span>
+                                                -4
+                                            </span>
+
+                                            <input
+                                                type="range"
+                                                min="-4"
+                                                max="4"
+                                                step="0.5"
+                                                value={
+                                                    adjustment
+                                                }
+                                                onChange={(
+                                                    e
+                                                ) =>
+                                                    handleChange(
+                                                        key,
+                                                        e
+                                                            .target
+                                                            .value
+                                                    )
+                                                }
+                                                aria-label={`Adjust ${label}`}
+                                            />
+
+                                            <span>
+                                                +4
+                                            </span>
+
+                                        </div>
+
+                                        <div className="adjustment-text">
+
+                                            {adjustment ===
+                                                0
+                                                ? 'No adjustment'
+                                                : adjustment >
+                                                    0
+                                                    ? `+${adjustment.toFixed(
+                                                        1
+                                                    )} ${unit}`
+                                                    : `${adjustment.toFixed(
+                                                        1
+                                                    )} ${unit}`}
+
+                                        </div>
+
                                     </div>
-                                    <input
-                                        type="range"
-                                        min="-4"
-                                        max="4"
-                                        step="0.5"
-                                        value={adj}
-                                        onChange={(e) => handleChange(key, e.target.value)}
-                                    />
-                                </div>
-                            );
-                        })}
+                                );
+                            }
+                        )}
+
                     </div>
 
-                    {/* ACTIONS */}
-                    <div className="size-actions">
+                    {/* =================================
+                        BUTTONS
+                    ================================= */}
+
+                    <div className="controls-footer">
+
                         <button
                             type="button"
-                            className="reset-size-btn"
-                            onClick={resetAdjustments}
+                            className="reset-button"
+                            onClick={
+                                resetAdjustments
+                            }
                         >
                             Reset
                         </button>
 
                         <button
                             type="button"
-                            className="save-size-btn"
-                            onClick={handleSave}
+                            className="save-button"
+                            onClick={
+                                handleSave
+                            }
                         >
-                            Save Fit & Continue
+                            Save Measurements
                         </button>
+
                     </div>
-                </div>
+
+                </section>
             </div>
         </div>
     );
 }
 
 export default SizeAdjuster;
-

@@ -125,70 +125,7 @@
 
 
 /* =========================================
-   WELCOME SCREEN
-========================================= */
-
-.ai-welcome {
-    width: 100%;
-    max-width: 760px;
-
-    margin: auto;
-
-    padding: 40px 24px;
-
-    text-align: center;
-
-    box-sizing: border-box;
-}
-
-.welcome-icon {
-    width: 64px;
-    height: 64px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    margin: 0 auto 22px;
-
-    border-radius: 18px;
-
-    background: #111111;
-    color: #ffffff;
-
-    font-size: 28px;
-}
-
-.ai-welcome h1 {
-    margin: 0;
-
-    font-size: 34px;
-    font-weight: 600;
-
-    letter-spacing: -0.8px;
-}
-
-.welcome-main-text {
-    margin: 14px 0 0;
-
-    font-size: 18px;
-    color: #444444;
-}
-
-.welcome-secondary-text {
-    max-width: 560px;
-
-    margin: 10px auto 0;
-
-    font-size: 15px;
-    line-height: 1.6;
-
-    color: #888888;
-}
-
-
-/* =========================================
-   MESSAGES
+   MESSAGES CONTAINER
 ========================================= */
 
 .messages-container {
@@ -198,288 +135,6 @@
     padding: 40px 24px 30px;
 
     box-sizing: border-box;
-}
-
-
-/* Message Row */
-
-.message-row {
-    display: flex;
-
-    width: 100%;
-
-    margin-bottom: 28px;
-}
-
-
-/* AI */
-
-.ai-row {
-    justify-content: flex-start;
-
-    gap: 12px;
-}
-
-
-/* User */
-
-.user-row {
-    justify-content: flex-end;
-}
-
-
-/* Avatar */
-
-.message-avatar {
-    width: 34px;
-    height: 34px;
-
-    flex-shrink: 0;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    border-radius: 9px;
-
-    font-size: 15px;
-}
-
-.ai-avatar {
-    background: #111111;
-    color: #ffffff;
-}
-
-
-/* Message Content */
-
-.message-content {
-    max-width: 70%;
-
-    padding: 12px 16px;
-
-    border-radius: 14px;
-
-    font-size: 15px;
-    line-height: 1.6;
-
-    box-sizing: border-box;
-}
-
-
-/* User Message */
-
-.user-message {
-    background: #111111;
-    color: #ffffff;
-
-    border-bottom-right-radius: 4px;
-}
-
-
-/* AI Message */
-
-.ai-message {
-    background: #f4f4f4;
-    color: #222222;
-
-    border-bottom-left-radius: 4px;
-}
-
-
-/* =========================================
-   TYPING INDICATOR
-========================================= */
-
-.typing-indicator {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-
-    padding: 14px 16px;
-
-    border-radius: 14px;
-
-    background: #f4f4f4;
-}
-
-.typing-indicator span {
-    width: 6px;
-    height: 6px;
-
-    border-radius: 50%;
-
-    background: #777777;
-
-    animation: typing 1.2s infinite ease-in-out;
-}
-
-.typing-indicator span:nth-child(2) {
-    animation-delay: 0.15s;
-}
-
-.typing-indicator span:nth-child(3) {
-    animation-delay: 0.3s;
-}
-
-@keyframes typing {
-
-    0%,
-    60%,
-    100% {
-        transform: translateY(0);
-        opacity: 0.4;
-    }
-
-    30% {
-        transform: translateY(-4px);
-        opacity: 1;
-    }
-}
-
-
-/* =========================================
-   INPUT SECTION
-========================================= */
-
-.ai-input-section {
-    width: 100%;
-
-    flex-shrink: 0;
-
-    padding: 14px 24px 22px;
-
-    display: flex;
-    justify-content: center;
-
-    background: #ffffff;
-
-    box-sizing: border-box;
-}
-
-.ai-input-wrapper {
-    width: 100%;
-    max-width: 800px;
-}
-
-
-/* Input Box */
-
-.ai-input-box {
-    width: 100%;
-    min-height: 56px;
-
-    display: flex;
-    align-items: flex-end;
-
-    padding: 7px 8px 7px 16px;
-
-    border: 1px solid #d8d8d8;
-    border-radius: 16px;
-
-    background: #ffffff;
-
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-
-    box-sizing: border-box;
-
-    transition:
-        border-color 0.2s ease,
-        box-shadow 0.2s ease;
-}
-
-.ai-input-box:focus-within {
-    border-color: #999999;
-
-    box-shadow: 0 3px 16px rgba(0, 0, 0, 0.09);
-}
-
-
-/* Textarea */
-
-.ai-input-box textarea {
-    flex: 1;
-
-    width: 100%;
-
-    resize: none;
-
-    border: none;
-    outline: none;
-
-    background: transparent;
-
-    padding: 9px 0;
-
-    font-family: inherit;
-    font-size: 15px;
-
-    line-height: 1.5;
-
-    color: #111111;
-
-    box-sizing: border-box;
-}
-
-.ai-input-box textarea::placeholder {
-    color: #999999;
-}
-
-.ai-input-box textarea:disabled {
-    opacity: 0.6;
-}
-
-
-/* Send Button */
-
-.send-button {
-    width: 40px;
-    height: 40px;
-
-    flex-shrink: 0;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    margin-left: 8px;
-
-    border: none;
-    border-radius: 10px;
-
-    background: #111111;
-    color: #ffffff;
-
-    font-size: 20px;
-    font-weight: 500;
-
-    cursor: pointer;
-
-    transition:
-        background 0.2s ease,
-        opacity 0.2s ease;
-}
-
-.send-button:hover:not(:disabled) {
-    background: #333333;
-}
-
-.send-button:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-}
-
-
-/* Disclaimer */
-
-.input-disclaimer {
-    margin: 9px 0 0;
-
-    text-align: center;
-
-    font-size: 11px;
-
-    color: #999999;
 }
 
 
@@ -534,62 +189,14 @@
         font-size: 13px;
     }
 
-    .ai-welcome {
-        padding: 30px 18px;
-    }
-
-    .welcome-icon {
-        width: 56px;
-        height: 56px;
-
-        font-size: 24px;
-    }
-
-    .ai-welcome h1 {
-        font-size: 27px;
-    }
-
-    .welcome-main-text {
-        font-size: 16px;
-    }
-
-    .welcome-secondary-text {
-        font-size: 14px;
-    }
-
     .messages-container {
         padding: 25px 16px;
-    }
-
-    .message-content {
-        max-width: 82%;
-
-        font-size: 14px;
-    }
-
-    .ai-input-section {
-        padding: 10px 12px 15px;
-    }
-
-    .input-disclaimer {
-        font-size: 10px;
     }
 }
 
 /* =========================================
    DESIGN REQUIREMENTS SUMMARY
 ========================================= */
-
-.design-summary {
-    width: 100%;
-    min-width: 260px;
-}
-
-.summary-title {
-    font-size: 15px;
-    font-weight: 600;
-    margin-bottom: 14px;
-}
 
 .summary-item {
     display: flex;
@@ -613,93 +220,9 @@
     text-align: right;
 }
 
-.custom-measurements {
-    margin-top: 15px;
-    padding-top: 12px;
-
-    border-top: 1px solid #dddddd;
-}
-
-.summary-subtitle {
-    margin-bottom: 8px;
-
-    font-size: 13px;
-    font-weight: 600;
-}
-
-/* ==========================================
-   SIZE ADJUSTER CHAT MESSAGE
-========================================== */
-
-.size-adjuster-message {
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-
-    box-sizing: border-box;
-
-    overflow: hidden;
-}
-
-/* ==========================================
-   SUMMARY ACTION BUTTONS
-========================================== */
-
-.summary-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 20px;
-    padding-top: 16px;
-    border-top: 1px solid #e5e5e5;
-}
-
-.summary-actions button {
-    width: 100%;
-    border: none;
-    border-radius: 10px;
-    padding: 13px 16px;
-    font-family: inherit;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.summary-change-button {
-    background: #ffffff;
-    color: #222222;
-    border: 1px solid #d8d8d8 !important;
-}
-
-.summary-change-button:hover {
-    background: #f5f5f5;
-}
-
-.summary-generate-button {
-    background: #111111;
-    color: #ffffff;
-}
-
-.summary-generate-button:hover {
-    background: #2a2a2a;
-    transform: translateY(-1px);
-}
-
-.summary-actions button:active {
-    transform: translateY(0);
-}
-
 /* =========================================
    DESIGN GENERATION
 ========================================= */
-
-.generation-message-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 14px;
-    width: 100%;
-    margin: 18px 0;
-}
 
 .generation-card {
     width: min(100%, 680px);
@@ -1107,10 +630,21 @@
     gap: 10px;
 }
 
-.wf-grid--2 { grid-template-columns: repeat(2, 1fr); }
-.wf-grid--3 { grid-template-columns: repeat(3, 1fr); }
-.wf-grid--4 { grid-template-columns: repeat(4, 1fr); }
-.wf-grid--5 { grid-template-columns: repeat(5, 1fr); }
+.wf-grid--2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.wf-grid--3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.wf-grid--4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.wf-grid--5 {
+    grid-template-columns: repeat(5, 1fr);
+}
 
 
 /* =========================================
@@ -1216,7 +750,7 @@
 .wf-color-check {
     font-size: 14px;
     color: #ffffff;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 
@@ -1527,9 +1061,17 @@
         min-width: 42px;
     }
 
-    .wf-grid--3 { grid-template-columns: repeat(2, 1fr); }
-    .wf-grid--4 { grid-template-columns: repeat(3, 1fr); }
-    .wf-grid--5 { grid-template-columns: repeat(5, 1fr); }
+    .wf-grid--3 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .wf-grid--4 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .wf-grid--5 {
+        grid-template-columns: repeat(5, 1fr);
+    }
 
     .wf-card-btn {
         padding: 14px 10px;

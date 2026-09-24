@@ -1,375 +1,585 @@
+/* =========================================
+   MAIN CONTAINER
+========================================= */
+
 .size-adjuster {
     width: 100%;
-    max-width: 900px;
+    max-width: 1180px;
+
     margin: 0 auto;
+
     padding: 24px;
-    border: 1px solid #e5e5e5;
-    border-radius: 20px;
-    background: #ffffff;
+
     box-sizing: border-box;
+
+    color: #171717;
 }
 
 
-/* ==========================================
-   HEADER
-========================================== */
+/* =========================================
+   MAIN BORDERED PANEL
+========================================= */
 
-.size-adjuster-header {
-    margin-bottom: 20px;
-}
-
-.size-adjuster-header h2 {
-    margin: 0 0 6px;
-    font-size: 22px;
-    font-weight: 600;
-    color: #111111;
-}
-
-.size-adjuster-header p {
-    margin: 0;
-    color: #777777;
-    font-size: 14px;
-    line-height: 1.5;
-}
-
-
-/* ==========================================
-   MAIN LAYOUT
-========================================== */
-
-.size-adjuster-content {
+.size-adjuster-panel {
     display: grid;
-    grid-template-columns: minmax(300px, 1fr) minmax(280px, 1fr);
-    gap: 32px;
-    align-items: center;
-}
 
+    grid-template-columns:
+        minmax(0, 1fr) minmax(380px, 0.9fr);
 
-/* ==========================================
-   SHIRT PREVIEW
-========================================== */
+    width: 100%;
 
-.shirt-preview {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-
-    min-height: 390px;
+    border: 1px solid #dedede;
 
     border-radius: 16px;
 
-    background: #f7f7f7;
+    background: #ffffff;
 
     overflow: hidden;
 }
 
-.shirt-svg {
-    width: 100%;
-    max-width: 400px;
-    height: 380px;
+
+/* =========================================
+   LEFT PREVIEW
+========================================= */
+
+.preview-panel {
+    min-width: 0;
+
+    padding: 24px;
+
+    border-right: 1px solid #dedede;
+
+    box-sizing: border-box;
 }
 
-.shirt-body {
-    fill: #222222;
 
-    stroke: #111111;
+/* =========================================
+   PANEL HEADINGS
+========================================= */
 
-    stroke-width: 3;
-
-    stroke-linejoin: round;
-
-    transition: all 0.25s ease;
+.panel-heading {
+    margin-bottom: 16px;
 }
 
-.shirt-neck {
-    fill: none;
-
-    stroke: #111111;
-
-    stroke-width: 5;
-
-    stroke-linecap: round;
-}
-
-.shirt-shadow {
-    fill: #dddddd;
-
-    opacity: 0.5;
-}
-
-.shirt-design {
-    fill: #ffffff;
+.panel-heading h3 {
+    margin: 0 0 5px;
 
     font-size: 18px;
 
     font-weight: 600;
 
-    letter-spacing: 2px;
+    color: #171717;
+}
+
+.panel-heading span,
+.panel-heading p {
+    margin: 0;
+
+    font-size: 13px;
+
+    line-height: 1.5;
+
+    color: #777;
 }
 
 
-/* ==========================================
-   CONTROLS CONTAINER
-========================================== */
+/* =========================================
+   PREVIEW CANVAS
+========================================= */
 
-.size-controls-container {
+.preview-canvas {
+    width: 100%;
+
+    height: 520px;
+
     display: flex;
 
-    flex-direction: column;
+    align-items: center;
 
     justify-content: center;
+
+    background: #fafafa;
+
+    border: 1px solid #eeeeee;
+
+    border-radius: 12px;
+
+    overflow: hidden;
+
+    box-sizing: border-box;
 }
 
 
-/* ==========================================
-   CURRENT VALUES
-========================================== */
+/* =========================================
+   SVG
+========================================= */
 
-.size-values {
-    display: flex;
-
-    flex-wrap: wrap;
-
-    gap: 8px;
-
-    margin-bottom: 24px;
-}
-
-.size-values span {
-    padding: 6px 10px;
-
-    border-radius: 8px;
-
-    background: #f1f1f1;
-
-    color: #555555;
-
-    font-size: 12px;
-}
-
-
-/* ==========================================
-   SLIDERS
-========================================== */
-
-.size-controls {
-    display: flex;
-
-    flex-direction: column;
-
-    gap: 20px;
-}
-
-.slider-row {
+.tshirt-svg {
     width: 100%;
+
+    height: 100%;
+
+    max-width: 580px;
+
+    display: block;
 }
 
-.slider-label {
-    display: flex;
 
-    justify-content: space-between;
+/* =========================================
+   T-SHIRT BODY
+========================================= */
 
-    margin-bottom: 8px;
+.tshirt-body {
+    fill: #eeeeee;
+
+    stroke: #222222;
+
+    stroke-width: 2;
+
+    stroke-linejoin: round;
+
+    transition:
+        d 0.2s ease;
+}
+
+
+/* =========================================
+   T-SHIRT SLEEVES
+========================================= */
+
+.tshirt-sleeve {
+    fill: #eeeeee;
+
+    stroke: #222222;
+
+    stroke-width: 2;
+
+    stroke-linejoin: round;
+
+    transition:
+        d 0.2s ease;
+}
+
+
+/* =========================================
+   NECKLINE
+========================================= */
+
+.tshirt-neck {
+    fill: none;
+
+    stroke: #222222;
+
+    stroke-width: 2;
+}
+
+
+/* =========================================
+   CENTER GUIDE
+========================================= */
+
+.center-line {
+    stroke: #d4d4d4;
+
+    stroke-width: 1;
+
+    stroke-dasharray: 4 5;
+
+    pointer-events: none;
+}
+
+
+/* =========================================
+   DIMENSION LINES
+========================================= */
+
+.dimension-line {
+    stroke: #777777;
+
+    stroke-width: 1.5;
+
+    fill: none;
+}
+
+.dimension-tick {
+    stroke: #777777;
+
+    stroke-width: 1.5;
+
+    fill: none;
+}
+
+
+/* =========================================
+   DIMENSION TEXT
+========================================= */
+
+.dimension-label {
+    fill: #444444;
+
+    font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
 
     font-size: 14px;
 
-    color: #333333;
+    font-weight: 400;
+
+    pointer-events: none;
 }
 
-.slider-label span:last-child {
+
+/* =========================================
+   CURRENT VALUES
+========================================= */
+
+.preview-values {
+    display: grid;
+
+    grid-template-columns:
+        repeat(4, minmax(0, 1fr));
+
+    gap: 1px;
+
+    margin-top: 14px;
+
+    border: 1px solid #e5e5e5;
+
+    border-radius: 10px;
+
+    overflow: hidden;
+
+    background: #e5e5e5;
+}
+
+.preview-values div {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 4px;
+
+    min-width: 0;
+
+    padding: 11px;
+
+    background: #ffffff;
+
+    box-sizing: border-box;
+}
+
+.preview-values span {
+    font-size: 11px;
+
     color: #777777;
-
-    font-size: 13px;
 }
 
-.slider-row input[type='range'] {
+.preview-values strong {
+    font-size: 14px;
+
+    font-weight: 600;
+
+    color: #171717;
+
+    white-space: nowrap;
+}
+
+
+/* =========================================
+   RIGHT CONTROLS
+========================================= */
+
+.controls-panel {
+    min-width: 0;
+
+    padding: 24px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    box-sizing: border-box;
+}
+
+
+/* =========================================
+   SLIDERS
+========================================= */
+
+.sliders-container {
+    display: flex;
+
+    flex-direction: column;
+
     width: 100%;
 
-    cursor: pointer;
-
-    accent-color: #111111;
+    gap: 0;
 }
 
 
-/* ==========================================
-   BUTTONS
-========================================== */
+/* =========================================
+   SLIDER ROW
+========================================= */
 
-.size-actions {
+.slider-row {
+    width: 100%;
+
+    padding: 17px 0;
+
+    border-bottom: 1px solid #eeeeee;
+
+    box-sizing: border-box;
+}
+
+
+/* =========================================
+   SLIDER TOP
+========================================= */
+
+.slider-top {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 15px;
+
+    margin-bottom: 10px;
+}
+
+.slider-top label {
+    display: block;
+
+    margin: 0;
+
+    font-size: 14px;
+
+    font-weight: 500;
+
+    color: #222222;
+}
+
+.slider-top small {
+    display: block;
+
+    margin-top: 3px;
+
+    font-size: 11px;
+
+    color: #888888;
+}
+
+.slider-top strong {
+    font-size: 15px;
+
+    font-weight: 600;
+
+    color: #171717;
+
+    white-space: nowrap;
+}
+
+
+/* =========================================
+   RANGE SLIDER
+========================================= */
+
+.slider-control {
+    display: grid;
+
+    grid-template-columns:
+        25px minmax(0, 1fr) 25px;
+
+    align-items: center;
+
+    gap: 8px;
+
+    width: 100%;
+}
+
+.slider-control input[type='range'] {
+    width: 100%;
+
+    min-width: 0;
+
+    margin: 0;
+
+    accent-color: #171717;
+
+    cursor: pointer;
+}
+
+.slider-control span {
+    font-size: 11px;
+
+    color: #888888;
+}
+
+.slider-control span:last-child {
+    text-align: right;
+}
+
+
+/* =========================================
+   ADJUSTMENT TEXT
+========================================= */
+
+.adjustment-text {
+    margin-top: 6px;
+
+    text-align: right;
+
+    font-size: 11px;
+
+    color: #888888;
+}
+
+
+/* =========================================
+   FOOTER BUTTONS
+========================================= */
+
+.controls-footer {
     display: flex;
 
     justify-content: flex-end;
 
+    align-items: center;
+
     gap: 10px;
 
-    margin-top: 28px;
+    margin-top: auto;
+
+    padding-top: 24px;
 }
 
-.size-actions button {
-    padding: 10px 18px;
+.reset-button,
+.save-button {
+    height: 40px;
 
-    border-radius: 10px;
+    padding: 0 18px;
 
-    font-size: 14px;
+    border-radius: 8px;
+
+    font-size: 13px;
+
+    font-family: inherit;
 
     cursor: pointer;
 
-    transition: all 0.2s ease;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease;
 }
 
-.reset-size-btn {
-    border: 1px solid #dddddd;
+
+/* =========================================
+   RESET
+========================================= */
+
+.reset-button {
+    border: 1px solid #d8d8d8;
 
     background: #ffffff;
 
     color: #333333;
 }
 
-.reset-size-btn:hover {
+.reset-button:hover {
     background: #f5f5f5;
 }
 
-.save-size-btn {
-    border: none;
 
-    background: #111111;
+/* =========================================
+   SAVE
+========================================= */
+
+.save-button {
+    border: 1px solid #171717;
+
+    background: #171717;
 
     color: #ffffff;
 }
 
-.save-size-btn:hover {
+.save-button:hover {
     background: #333333;
 }
 
 
-/* ==========================================
-   MOBILE
-========================================== */
+/* =========================================
+   EMPTY STATE
+========================================= */
 
-@media (max-width: 700px) {
+.empty-state {
+    width: 100%;
 
-    .size-adjuster {
-        padding: 16px;
+    padding: 40px;
 
-        border-radius: 16px;
-    }
+    text-align: center;
 
-    .size-adjuster-content {
+    border: 1px solid #dddddd;
+
+    border-radius: 12px;
+
+    color: #777777;
+
+    box-sizing: border-box;
+}
+
+
+/* =========================================
+   RESPONSIVE
+========================================= */
+
+@media (max-width: 900px) {
+    .size-adjuster-panel {
         grid-template-columns: 1fr;
-
-        gap: 20px;
     }
 
-    .shirt-preview {
-        min-height: 320px;
+    .preview-panel {
+        border-right: none;
+
+        border-bottom: 1px solid #dedede;
     }
 
-    .shirt-svg {
-        height: 320px;
+    .preview-canvas {
+        height: 460px;
+    }
+}
+
+
+@media (max-width: 600px) {
+    .size-adjuster {
+        padding: 14px;
     }
 
-    .size-actions {
+    .preview-panel,
+    .controls-panel {
+        padding: 18px;
+    }
+
+    .preview-canvas {
+        height: 400px;
+    }
+
+    .preview-values {
+        grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+    }
+
+    .slider-top {
+        align-items: flex-start;
+    }
+
+    .controls-footer {
         flex-direction: column;
     }
 
-    .size-actions button {
+    .reset-button,
+    .save-button {
         width: 100%;
     }
-}
-
-/* ==========================================
-   CHAT CONTAINER FIX
-========================================== */
-
-.size-adjuster-message {
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-}
-
-
-/* Make the size adjuster stay inside
-   the chat message */
-
-.size-adjuster {
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-    overflow: hidden;
-}
-
-
-/* Allow the two columns to shrink
-   instead of overflowing */
-
-.size-adjuster-content {
-    display: grid;
-
-    grid-template-columns:
-        minmax(0, 45%) minmax(0, 55%);
-
-    gap: 20px;
-
-    align-items: center;
-
-    width: 100%;
-    max-width: 100%;
-
-    min-width: 0;
-
-    box-sizing: border-box;
-}
-
-
-/* Prevent the preview from forcing
-   the container wider */
-
-.shirt-preview {
-    display: flex;
-
-    justify-content: center;
-    align-items: center;
-
-    width: 100%;
-    min-width: 0;
-
-    min-height: 360px;
-
-    border-radius: 16px;
-
-    background: #f7f7f7;
-
-    overflow: hidden;
-
-    box-sizing: border-box;
-}
-
-
-/* Prevent the controls from forcing
-   the container wider */
-
-.size-controls-container {
-    width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-}
-
-
-/* Make sure sliders never exceed
-   their column */
-
-.slider-row {
-    width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-}
-
-.slider-row input[type='range'] {
-    display: block;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
 }
